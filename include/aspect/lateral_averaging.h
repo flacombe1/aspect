@@ -28,8 +28,6 @@
 
 namespace aspect
 {
-  using namespace dealii;
-
   namespace internal
   {
     /**
@@ -110,15 +108,6 @@ namespace aspect
   class LateralAveraging : public SimulatorAccess<dim>
   {
     public:
-      /**
-       * @deprecated: This function is deprecated and only maintained for backward compatibility.
-       * Use the function compute_lateral_averages() with the same arguments instead.
-       */
-      DEAL_II_DEPRECATED
-      std::vector<std::vector<double>>
-      get_averages(const unsigned int n_slices,
-                   const std::vector<std::string> &property_names) const;
-
       /**
        * Return a depth profile of lateral averages of the selected
        * @p property_names. This function is a convenience interface for

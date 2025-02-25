@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2012 - 2023 by the authors of the ASPECT code.
+  Copyright (C) 2012 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -32,8 +32,6 @@ namespace aspect
 {
   namespace InitialTemperature
   {
-    using namespace dealii;
-
     /**
      * A namespace for selecting how to determine the age of a
      * boundary layer. Current options are:

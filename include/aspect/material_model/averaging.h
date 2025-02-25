@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2022 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -28,8 +28,6 @@ namespace aspect
 {
   namespace MaterialModel
   {
-    using namespace dealii;
-
     /**
      * An enum to define what kind of averaging operations are implemented.
      * These are:

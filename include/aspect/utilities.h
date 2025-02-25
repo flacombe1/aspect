@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2014 - 2023 by the authors of the ASPECT code.
+  Copyright (C) 2014 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -53,7 +53,20 @@ namespace aspect
    */
   namespace Utilities
   {
-    using namespace dealii;
+    /**
+    * Because many places in ASPECT assume that all functions in the namespace
+    * <code>dealii::Utilities</code> are available without qualification as
+    * <code>Utilities::function</code>, just as all the function in the
+    * namespace <code>aspect::Utilities</code>, we make sure all these functions
+    * are available inside <code>aspect::Utilities</code>. This is maybe not
+    * the cleanest solution, but it is most compatible with a lot of existing
+    * code, and also allows to migrate ASPECT functions into deal.II when
+    * useful without introducing incompatibilities.
+    *
+    * We need to do this in every header that introduces something into the
+    * namespace <code>aspect::Utilities</code>, because it needs to happen
+    * no matter which header files of ASPECT are included.
+    */
     using namespace dealii::Utilities;
 
 
@@ -76,6 +89,13 @@ namespace aspect
                                  const unsigned int N,
                                  const std::string &id_text);
 
+    /**
+     * A namespace that contains options and functions able to parse
+     * a map of double values from a string representation of the form
+     * "key1 : value1, key2 : value2, etc". The parsing and output
+     * is controlled by the Options struct and the parse_map_to_double_array()
+     * function.
+     */
     namespace MapParsing
     {
       /**
@@ -84,7 +104,8 @@ namespace aspect
        */
       struct Options
       {
-        /* A list of valid key names that are allowed
+        /**
+         * A list of valid key names that are allowed
          * to appear in the map. If this list is empty
          * it is assumed to be equal to the list of
          * required keys. If this list is longer than
@@ -94,7 +115,8 @@ namespace aspect
          */
         std::vector<std::string> list_of_allowed_keys;
 
-        /* A list of valid key names that are required
+        /**
+         * A list of valid key names that are required
          * to appear in the map. Only these keys will be
          * parsed into the map structure and the order of
          * these keys determines the order of entries
@@ -102,14 +124,14 @@ namespace aspect
          */
         std::vector<std::string> list_of_required_keys;
 
-        /*
+        /**
          * A name that identifies the type of input property (e.g. 'density', 'viscosity')
          * that is being parsed by this function. This name is used in generating
          * error messages if the map does not conform to the expected format.
          */
         std::string property_name;
 
-        /*
+        /**
          * If true, allow multiple values
          * for each key. If false only allow a single value per key. In either
          * case each key is only allowed to appear once. Multiple values
@@ -125,7 +147,7 @@ namespace aspect
          */
         bool allow_missing_keys;
 
-        /*
+        /**
          * Whether to store the number of values
          * per key in n_values_per_key while creating
          * the map. This vector can be later accessed
@@ -135,7 +157,7 @@ namespace aspect
          */
         bool store_values_per_key;
 
-        /*
+        /**
          * Whether to check the number of values
          * per key in the map against values stored
          * in n_values_per_key. This allows to
@@ -145,7 +167,7 @@ namespace aspect
          */
         bool check_values_per_key;
 
-        /*
+        /**
          * A vector of unsigned
          * integers that is used by store_values_per_key and
          * check_values_per_key to either store the current map
@@ -288,6 +310,7 @@ namespace aspect
      *   Utilities::MapParsing::parse_map_to_double_array() function. Please
      *   use the other function instead.
      */
+    DEAL_II_DEPRECATED
     std::vector<double>
     parse_map_to_double_array (const std::string &key_value_map,
                                const std::vector<std::string> &list_of_keys,
@@ -671,7 +694,7 @@ namespace aspect
      */
     void create_directory(const std::string &pathname,
                           const MPI_Comm comm,
-                          bool silent);
+                          const bool silent);
 
     /**
      * A namespace defining the cubic spline interpolation that can be used
@@ -1062,7 +1085,7 @@ namespace aspect
      * @p output_filename An optional file name into which (if present) the solver history will
      *   be written.
      *
-     * @return This function never returns normally. It always exits via an exception, either
+     * @note This function never returns normally. It always exits via an exception, either
      *   of type ExcMessage (on rank 0 of the parallel computation) or QuietException (on all
      *   other ranks).
      */
@@ -1170,8 +1193,8 @@ namespace aspect
                                                    std::mt19937 &random_number_generator);
 
     /**
-    * Wraps angle between 0 and 360 degrees.
-    */
+     * Wraps angle between 0 and 360 degrees.
+     */
     double wrap_angle(const double angle);
 
     /**

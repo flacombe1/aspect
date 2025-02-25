@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2023 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -23,7 +23,6 @@
 #include <aspect/utilities.h>
 #include <aspect/compat.h>
 #include <aspect/simulator_access.h>
-#include <aspect/citation_info.h>
 
 #include <aspect/simulator/assemblers/interface.h>
 #include <aspect/melt.h>
@@ -127,7 +126,7 @@ namespace aspect
                              " defined that handles this formulation."));
 
     // add the terms for traction boundary conditions
-    if (!boundary_traction_manager.get_active_boundary_traction_names().empty())
+    if (!boundary_traction_manager.get_prescribed_boundary_traction_indicators().empty())
       {
         assemblers->stokes_system_on_boundary_face.push_back(
           std::make_unique<aspect::Assemblers::StokesBoundaryTraction<dim>>());
@@ -526,6 +525,7 @@ namespace aspect
 
         Amg_data.smoother_sweeps = 2;
         Amg_data.coarse_type = "symmetric Gauss-Seidel";
+        Amg_data.constant_modes = constant_modes;
 
         LinearAlgebra::PreconditionAMG *Mp_preconditioner_AMG
           = dynamic_cast<LinearAlgebra::PreconditionAMG *> (Mp_preconditioner.get());
@@ -727,9 +727,6 @@ namespace aspect
     TimerOutput::Scope timer (computing_timer,
                               timer_section_name);
 
-    // Re-compute the pressure scaling factor.
-    pressure_scaling = compute_pressure_scaling_factor();
-
     if (rebuild_stokes_matrix == true)
       system_matrix = 0;
 
@@ -743,7 +740,7 @@ namespace aspect
     // we will update the right-hand side with boundary information in
     // StokesMatrixFreeHandler::correct_stokes_rhs().
     if (!stokes_matrix_free)
-      Assert(rebuild_stokes_matrix || boundary_velocity_manager.get_active_boundary_velocity_conditions().size()==0,
+      Assert(rebuild_stokes_matrix || boundary_velocity_manager.get_prescribed_boundary_velocity_indicators().empty(),
              ExcInternalError("If we have inhomogeneous constraints, we must re-assemble the system matrix."));
 
     system_rhs = 0;
@@ -767,7 +764,7 @@ namespace aspect
       = (
           // see if we need to assemble traction boundary conditions.
           // only if so do we actually need to have an FEFaceValues object
-          boundary_traction_manager.get_active_boundary_traction_names ().size() > 0
+          !boundary_traction_manager.get_prescribed_boundary_traction_indicators().empty()
           ?
           update_values |
           update_quadrature_points |

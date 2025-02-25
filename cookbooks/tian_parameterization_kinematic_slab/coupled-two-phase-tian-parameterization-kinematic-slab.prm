@@ -229,10 +229,12 @@ subsection Material model
     # values to encourage water to hydrate the overlying mantle. The polynomials defined
     # in Tian et al., 2019 also reach very large values at low P-T conditions, and so limiting
     # the weight percent to reasonable values is recommended.
-    set Maximum weight percent water in peridotite       = 2
-    set Maximum weight percent water in gabbro           = 1
-    set Maximum weight percent water in MORB             = 2
-    set Maximum weight percent water in sediment         = 3
+    subsection Tian 2019 model
+      set Maximum weight percent water in peridotite       = 2
+      set Maximum weight percent water in gabbro           = 1
+      set Maximum weight percent water in MORB             = 2
+      set Maximum weight percent water in sediment         = 3
+    end
   end
 
   subsection Visco Plastic
@@ -290,7 +292,7 @@ subsection Postprocess
   set List of postprocessors = visualization, composition statistics, velocity statistics
 
   subsection Visualization
-    set List of output variables      = density, viscosity, thermal expansivity, melt material properties, melt fraction
+    set List of output variables      = material properties, melt material properties, melt fraction
     set Output format                 = vtu
     set Time between graphical output = 5e4
     set Interpolate output            = true
@@ -298,6 +300,10 @@ subsection Postprocess
 
     subsection Melt material properties
       set List of properties          = fluid density, permeability, fluid viscosity, compaction viscosity
+    end
+
+    subsection Material properties
+      set List of material properties = density, viscosity, thermal expansivity
     end
   end
 end

@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2022 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -41,8 +41,6 @@ namespace aspect
    */
   namespace InitialTopographyModel
   {
-    using namespace dealii;
-
     /**
      * Base class for classes that describe particular initial topographies
      * for the domain.

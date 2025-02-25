@@ -1,5 +1,9 @@
 /*
+<<<<<<< HEAD
   Copyright (C) 2023 - 2023 by the authors of the ASPECT code.
+=======
+  Copyright (C) 2023 - 2024 by the authors of the ASPECT code.
+>>>>>>> 76bb6643a816b5eec55a498136343a2caa4c8579
 
   This file is part of ASPECT.
 
@@ -68,7 +72,11 @@ namespace aspect
 
           return
             std::make_pair<Reaction, double>(Reaction::repeat_step,
+<<<<<<< HEAD
                                              this->get_timestep()*this->cut_back_amount);
+=======
+                                             this->get_timestep()*this->cut_back_factor);
+>>>>>>> 76bb6643a816b5eec55a498136343a2caa4c8579
         }
       else
         {
@@ -89,7 +97,11 @@ namespace aspect
       {
         prm.enter_subsection("Repeat on nonlinear solver failure");
 
+<<<<<<< HEAD
         prm.declare_entry("Cut back amount", "0.5",
+=======
+        prm.declare_entry("Cut back factor", "0.5",
+>>>>>>> 76bb6643a816b5eec55a498136343a2caa4c8579
                           Patterns::Double (0.),
                           "A factor that controls the size of the time step when repeating. The "
                           "default of 0.5 corresponds to 50\\% of the original step taken.");
@@ -109,7 +121,11 @@ namespace aspect
       {
         prm.enter_subsection("Repeat on nonlinear solver failure");
 
+<<<<<<< HEAD
         cut_back_amount = prm.get_double("Cut back amount");
+=======
+        cut_back_factor = prm.get_double("Cut back factor");
+>>>>>>> 76bb6643a816b5eec55a498136343a2caa4c8579
 
         prm.leave_subsection();
       }

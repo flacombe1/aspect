@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2023 by the authors of the ASPECT code.
+ Copyright (C) 2023 - 2024 by the authors of the ASPECT code.
  This file is part of ASPECT.
  ASPECT is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -28,6 +28,21 @@ namespace aspect
     {
       namespace Utilities
       {
+        /**
+         * Because many places in ASPECT assume that all functions in the namespace
+         * <code>aspect::Utilities</code> are available without qualification as
+         * <code>Utilities::function</code>, we make sure all these functions
+         * are also available inside <code>aspect::Particle::Property::Utilities</code>.
+         * This is maybe not the cleanest solution, but it is most compatible
+         * with a lot of existing code.
+         *
+         * We need to do this in every header that creates a new namespace named
+         * <code>Utilities</code>, because otherwise the compiler may not find
+         * the requested function in the current namespace and issue an error, even
+         * though the function is available in the namespace <code>aspect::Utilities</code>.
+         */
+        using namespace aspect::Utilities;
+
         /**
          * Return an even permutation based on an index. This is an internal
          * utilities function, also used by the unit tester.
@@ -216,36 +231,11 @@ namespace aspect
                                             std::vector<double> &particle_properties) const override;
 
           /**
-           * Update function. This function is called every time an update is
-           * request by need_update() for every particle for every property.
-           * It is obvious that
-           * this function is called a lot, so its code should be efficient.
-           * The interface provides a default implementation that does nothing,
-           * therefore derived plugins that do not require an update do not
-           * need to implement this function.
-           *
-           * @param [in] data_position An unsigned integer that denotes which
-           * component of the particle property vector is associated with the
-           * current property. For properties that own several components it
-           * denotes the first component of this property, all other components
-           * fill consecutive entries in the @p particle_properties vector.
-           *
-           * @param [in] solution The values of the solution variables at the
-           * current particle position.
-           *
-           * @param [in] gradients The gradients of the solution variables at
-           * the current particle position.
-           *
-           * @param [in,out] particle The particle that is updated within
-           * the call of this function. The particle location can be accessed
-           * using particle->get_location() and its properties using
-           * particle->get_properties().
+           * @copydoc aspect::Particle::Property::Interface::update_particle_properties()
            */
           void
-          update_particle_property (const unsigned int data_position,
-                                    const Vector<double> &solution,
-                                    const std::vector<Tensor<1,dim>> &gradients,
-                                    typename ParticleHandler<dim>::particle_iterator &particle) const override;
+          update_particle_properties (const ParticleUpdateInputs<dim> &inputs,
+                                      typename ParticleHandler<dim>::particle_iterator_range &particles) const override;
 
           /**
            * This function tells the particle manager that

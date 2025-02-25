@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2023 by the authors of the ASPECT code.
+  Copyright (C) 2023 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -33,8 +33,6 @@ namespace aspect
 {
   namespace GeometryModel
   {
-    using namespace dealii;
-
     /**
      * A geometry model based on the 2D Cartesian van Keken 2008 subduction
      * benchmark. A custom mesh that is better suited to deal with

@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2016 - 2022 by the authors of the ASPECT code.
+  Copyright (C) 2016 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -22,7 +22,6 @@
 #include <aspect/melt.h>
 #include <aspect/simulator.h>
 #include <aspect/utilities.h>
-#include <aspect/citation_info.h>
 #include <aspect/mesh_deformation/interface.h>
 #include <aspect/simulator/assemblers/advection.h>
 #include <deal.II/base/signaling_nan.h>
@@ -68,6 +67,19 @@ namespace aspect
       const FEValuesExtractors::Scalar ex_p_c = introspection.variable("compaction pressure").extractor_scalar();
       fe_values[ex_p_c].get_function_values (solution, compaction_pressures);
     }
+
+
+
+    template <int dim>
+    MeltOutputs<dim>::MeltOutputs  (const unsigned int n_points,
+                                    const unsigned int /*n_comp*/)
+      :
+      compaction_viscosities(n_points, numbers::signaling_nan<double>()),
+      fluid_viscosities(n_points, numbers::signaling_nan<double>()),
+      permeabilities(n_points, numbers::signaling_nan<double>()),
+      fluid_densities(n_points, numbers::signaling_nan<double>()),
+      fluid_density_gradients(n_points, numbers::signaling_nan<Tensor<1,dim>>())
+    {}
 
 
 
@@ -593,6 +605,9 @@ namespace aspect
           const double K_D = this->get_melt_handler().limited_darcy_coefficient(melt_outputs->permeabilities[q] / melt_outputs->fluid_viscosities[q],
                                                                                 is_melt_cell);
 
+          const double JxW = scratch.face_finite_element_values.JxW(q);
+          const Tensor<1,dim> normal_vector = scratch.face_finite_element_values.normal_vector(q);
+
           for (unsigned int i=0, i_stokes=0; i_stokes<stokes_dofs_per_cell; /*increment at end of loop*/)
             {
               const unsigned int component_index_i = fe.system_to_component_index(i).first;
@@ -603,9 +618,9 @@ namespace aspect
                   data.local_rhs(i_stokes) += (scratch.face_finite_element_values[ex_p_f].value(i, q)
                                                * this->get_pressure_scaling() * K_D *
                                                (density_f
-                                                * (scratch.face_finite_element_values.normal_vector(q) * gravity)
+                                                * (normal_vector * gravity)
                                                 - grad_p_f[q])
-                                               * scratch.face_finite_element_values.JxW(q));
+                                               * JxW);
                   ++i_stokes;
                 }
               ++i;
@@ -829,6 +844,8 @@ namespace aspect
               density_c_P_melt = 1.0;
             }
 
+          const double JxW = scratch.finite_element_values.JxW(q);
+
           // do the actual assembly. note that we only need to loop over the advection
           // shape functions because these are the only contributions we compute here
           for (unsigned int i=0; i<advection_dofs_per_cell; ++i)
@@ -840,8 +857,7 @@ namespace aspect
                   * (gamma + melt_transport_RHS)
                   + scratch.phi_field[i]
                   * reaction_term)
-                 *
-                 scratch.finite_element_values.JxW(q);
+                 * JxW;
 
               for (unsigned int j=0; j<advection_dofs_per_cell; ++j)
                 {
@@ -856,8 +872,7 @@ namespace aspect
                           + (factor * scratch.phi_field[i] * scratch.phi_field[j])) *
                        (density_c_P_melt)
                        + time_step * scratch.phi_field[i] * scratch.phi_field[j] * melt_transport_LHS
-                     )
-                     * scratch.finite_element_values.JxW(q);
+                     ) * JxW;
                 }
             }
         }
@@ -977,18 +992,21 @@ namespace aspect
       const FEValuesExtractors::Scalar ex_p_f = introspection.variable("fluid pressure").extractor_scalar();
 
       for (unsigned int q=0; q<n_q_points; ++q)
-        for (unsigned int i=0, i_stokes=0; i_stokes<stokes_dofs_per_cell; /*increment at end of loop*/)
-          {
-            const unsigned int component_index_i = fe.system_to_component_index(i).first;
+        {
+          const double JxW = scratch.finite_element_values.JxW(q);
+          for (unsigned int i=0, i_stokes=0; i_stokes<stokes_dofs_per_cell; /*increment at end of loop*/)
+            {
+              const unsigned int component_index_i = fe.system_to_component_index(i).first;
 
-            if (is_velocity_or_pressures(introspection,p_c_component_index,p_f_component_index,component_index_i))
-              {
-                scratch.phi_p[i_stokes] = scratch.finite_element_values[ex_p_f].value (i, q);
-                data.local_pressure_shape_function_integrals(i_stokes) += scratch.phi_p[i_stokes] * scratch.finite_element_values.JxW(q);
-                ++i_stokes;
-              }
-            ++i;
-          }
+              if (is_velocity_or_pressures(introspection,p_c_component_index,p_f_component_index,component_index_i))
+                {
+                  scratch.phi_p[i_stokes] = scratch.finite_element_values[ex_p_f].value (i, q);
+                  data.local_pressure_shape_function_integrals(i_stokes) += scratch.phi_p[i_stokes] * JxW;
+                  ++i_stokes;
+                }
+              ++i;
+            }
+        }
     }
 
     template <int dim>
@@ -1021,11 +1039,9 @@ namespace aspect
       Assert(face_no != numbers::invalid_unsigned_int,ExcInternalError());
 
       const typename DoFHandler<dim>::face_iterator face = cell->face(face_no);
+      const auto &traction_bis = this->get_boundary_traction_manager().get_prescribed_boundary_traction_indicators();
 
-      if (this->get_boundary_traction_manager().get_active_boundary_traction_names()
-          .find (face->boundary_id())
-          !=
-          this->get_boundary_traction_manager().get_active_boundary_traction_names().end())
+      if (traction_bis.find(face->boundary_id()) != traction_bis.end())
         {
           scratch.face_finite_element_values.reinit (cell, face_no);
 
@@ -1037,6 +1053,8 @@ namespace aspect
                                      scratch.face_finite_element_values.quadrature_point(q),
                                      scratch.face_finite_element_values.normal_vector(q));
 
+              const double JxW = scratch.face_finite_element_values.JxW(q);
+
               for (unsigned int i=0, i_stokes=0; i_stokes<stokes_dofs_per_cell; /*increment at end of loop*/)
                 {
                   const unsigned int component_index_i = fe.system_to_component_index(i).first;
@@ -1045,7 +1063,7 @@ namespace aspect
                     {
                       data.local_rhs(i_stokes) += scratch.face_finite_element_values[introspection.extractors.velocities].value(i,q) *
                                                   traction *
-                                                  scratch.face_finite_element_values.JxW(q);
+                                                  JxW;
                       ++i_stokes;
                     }
                   ++i;
@@ -1061,7 +1079,7 @@ namespace aspect
   MeltHandler<dim>::
   compute_melt_variables(LinearAlgebra::BlockSparseMatrix &system_matrix,
                          LinearAlgebra::BlockVector &solution,
-                         LinearAlgebra::BlockVector &system_rhs)
+                         LinearAlgebra::BlockVector &system_rhs) const
   {
     if (!this->include_melt_transport())
       return;
@@ -1677,7 +1695,7 @@ namespace aspect
       std::make_unique<aspect::Assemblers::MeltStokesSystemBoundary<dim>>());
 
     // add the terms for traction boundary conditions
-    if (!this->get_boundary_traction_manager().get_active_boundary_traction_names().empty())
+    if (!this->get_boundary_traction_manager().get_prescribed_boundary_traction_indicators().empty())
       {
         assemblers.stokes_system_on_boundary_face.push_back(
           std::make_unique<Assemblers::MeltBoundaryTraction<dim>> ());
@@ -1897,8 +1915,17 @@ namespace aspect
                 const Tensor<1,dim> n_hat = scratch.face_finite_element_values.normal_vector(q_point);
                 const Tensor<1,dim> g_hat = (g_norm == 0.0 ? Tensor<1,dim>() : gravity/g_norm);
 
+                small_vector<double> phi_u_times_g_hat(stokes_dofs_per_cell);
+                small_vector<double> phi_u_times_n_hat(stokes_dofs_per_cell);
+                for (unsigned int i=0; i<stokes_dofs_per_cell; ++i)
+                  {
+                    phi_u_times_g_hat[i] = scratch.phi_u[i] * g_hat;
+                    phi_u_times_n_hat[i] = scratch.phi_u[i] * n_hat;
+                  }
+
                 const double pressure_perturbation = scratch.face_material_model_outputs.densities[q_point] *
                                                      this->get_timestep() * free_surface_theta * g_norm;
+                const double JxW = scratch.face_finite_element_values.JxW(q_point);
 
                 // see Kaus et al 2010 for details of the stabilization term
                 for (unsigned int i=0; i< stokes_dofs_per_cell; ++i)
@@ -1906,8 +1933,8 @@ namespace aspect
                     {
                       // The fictive stabilization stress is (phi_u[i].g)*(phi_u[j].n)
                       const double stress_value = - pressure_perturbation
-                                                  * (scratch.phi_u[i] * g_hat) * (scratch.phi_u[j] * n_hat)
-                                                  * scratch.face_finite_element_values.JxW(q_point);
+                                                  * phi_u_times_g_hat[i] * phi_u_times_n_hat[j]
+                                                  * JxW;
 
                       data.local_matrix(i,j) += stress_value;
                     }

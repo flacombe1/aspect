@@ -1,5 +1,9 @@
 /*
+<<<<<<< HEAD
   Copyright (C) 2018 - 2023 by the authors of the ASPECT code.
+=======
+  Copyright (C) 2018 - 2024 by the authors of the ASPECT code.
+>>>>>>> 76bb6643a816b5eec55a498136343a2caa4c8579
 
   This file is part of ASPECT.
 
@@ -28,8 +32,11 @@ namespace aspect
 {
   namespace TimeStepping
   {
+<<<<<<< HEAD
     using namespace dealii;
 
+=======
+>>>>>>> 76bb6643a816b5eec55a498136343a2caa4c8579
     /**
      * A class that implements a time stepping plugin to repeat a time step if the
      * nonlinear solver failed to converge in the specified number of iterations.
@@ -81,22 +88,38 @@ namespace aspect
          * Parameter to determine how much smaller the time step should be
          * repeated as.
          */
+<<<<<<< HEAD
         double cut_back_amount;
+=======
+        double cut_back_factor;
+>>>>>>> 76bb6643a816b5eec55a498136343a2caa4c8579
 
         /**
          * Enabled by nonlinear_solver_has_failed() to signal that this
          * plugin needs to act in the current timestep;
+<<<<<<< HEAD
         */
+=======
+         */
+>>>>>>> 76bb6643a816b5eec55a498136343a2caa4c8579
         mutable bool nonlinear_solver_just_failed;
 
         /**
          * How many times should we try cutting the timestep size before giving up?
+<<<<<<< HEAD
         */
+=======
+         */
+>>>>>>> 76bb6643a816b5eec55a498136343a2caa4c8579
         unsigned int maximum_number_of_repeats;
 
         /**
          * How many times have we been repeating already in this timestep?
+<<<<<<< HEAD
         */
+=======
+         */
+>>>>>>> 76bb6643a816b5eec55a498136343a2caa4c8579
         unsigned int current_number_of_repeats;
     };
   }

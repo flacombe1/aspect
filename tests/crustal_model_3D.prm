@@ -1,8 +1,12 @@
-############### Global parameters
+# This test makes sure the cookbook crustal_model_3D runs
+# as expected.
 
 set Dimension                              = 3
-set Start time                             = 0
+
+include $ASPECT_SOURCE_DIR/cookbooks/crustal_deformation/crustal_model_3D.prm
+
 set End time                               = 0
+<<<<<<< HEAD
 set Use years in output instead of seconds = true
 set CFL number                             = .5
 set Nonlinear solver scheme                = single Advection, iterated Stokes
@@ -90,36 +94,16 @@ end
 # the mesh globally and adaptively, what fraction of cells should
 # be refined in each adaptive refinement step, and what refinement
 # indicator to use when refining the mesh adaptively.
+=======
+set Max nonlinear iterations               = 100
+>>>>>>> 76bb6643a816b5eec55a498136343a2caa4c8579
 
 subsection Mesh refinement
   set Initial adaptive refinement        = 0
-  set Initial global refinement          = 1
-  set Refinement fraction                = 0.9
-  set Strategy                           = strain rate
-  set Coarsening fraction                = 0.05
-  set Minimum refinement level           = 1
+  set Initial global refinement          = 0
+  set Minimum refinement level           = 0
 end
-
-############### Parameters describing what to do with the solution
-# The final section allows us to choose which postprocessors to
-# run at the end of each time step. We select to generate graphical
-# output that will consist of the primary variables (velocity, pressure,
-# temperature and the compositional fields) as well as the density and
-# viscosity. We also select to compute some statistics about the
-# velocity field.
 
 subsection Postprocess
-  set List of postprocessors = visualization, velocity statistics, topography, pressure statistics
-
-  subsection Visualization
-    set Interpolate output = false
-    set List of output variables = density, viscosity, strain rate, error indicator
-  end
-end
-
-subsection Solver parameters
-  subsection Stokes solver parameters
-    set Linear solver tolerance = 1e-9
-    set Number of cheap Stokes solver steps = 0
-  end
+  set List of postprocessors = velocity statistics, topography, pressure statistics
 end

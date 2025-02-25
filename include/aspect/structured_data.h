@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2014 - 2023 by the authors of the ASPECT code.
+  Copyright (C) 2014 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -31,7 +31,21 @@ namespace aspect
 {
   namespace Utilities
   {
-    using namespace dealii;
+    /**
+     * Because many places in ASPECT assume that all functions in the namespace
+     * <code>dealii::Utilities</code> are available without qualification as
+     * <code>Utilities::function</code>, just as all the function in the
+     * namespace <code>aspect::Utilities</code>, we make sure all these functions
+     * are available inside <code>aspect::Utilities</code>. This is maybe not
+     * the cleanest solution, but it is most compatible with a lot of existing
+     * code, and also allows to migrate ASPECT functions into deal.II when
+     * useful without introducing incompatibilities.
+     *
+     * We need to do this in every header that introduces something into the
+     * namespace <code>aspect::Utilities</code>, because it needs to happen
+     * no matter which header files of ASPECT are included.
+     */
+    using namespace dealii::Utilities;
 
     /**
      * StructuredDataLookup (formerly AsciiDataLookup) represents structured
@@ -177,10 +191,14 @@ namespace aspect
          * @param component The index (starting at 0) of the data column to be
          * returned. The index is therefore less than the number of data
          * columns in the data file (or specified in the constructor).
+         * @param crash_if_not_in_range If set to true, the function will throw
+         * when the requested position is outside the range of the coordinates
+         * provided by the data file.
          */
         double
         get_data(const Point<dim> &position,
-                 const unsigned int component) const;
+                 const unsigned int component,
+                 const bool crash_if_not_in_range = false) const;
 
         /**
          * Returns the gradient of the function based on the bilinear
@@ -247,6 +265,15 @@ namespace aspect
          * Return the maximum value of the component values.
          */
         double get_maximum_component_value(const unsigned int component) const;
+
+        /**
+         * Retrieve the number of table points for a given dimension.
+         * Equivalent to calling get_interpolation_point_coordinates().size().
+         *
+         * @param dimension The index of the dimension for which to get the number of table points.
+         * @return The number of points along the specified dimension.
+         */
+        unsigned int get_number_of_coordinates(const unsigned int dimension) const;
 
       private:
         /**
@@ -767,11 +794,6 @@ namespace aspect
          */
         std::unique_ptr<aspect::Utilities::StructuredDataLookup<1>> lookup;
     };
-
-
-
-    template <int dim>
-    using AsciiDataLookup DEAL_II_DEPRECATED = StructuredDataLookup<dim>;
   }
 }
 

@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2015 - 2022 by the authors of the ASPECT code.
+ Copyright (C) 2015 - 2024 by the authors of the ASPECT code.
 
  This file is part of ASPECT.
 
@@ -21,7 +21,7 @@
 #ifndef _aspect_particle_interpolator_interface_h
 #define _aspect_particle_interpolator_interface_h
 
-#include <aspect/plugins.h>
+#include <aspect/particle/interface.h>
 #include <aspect/global.h>
 
 #include <deal.II/particles/particle.h>
@@ -37,7 +37,6 @@ namespace aspect
   {
     namespace Interpolator
     {
-      using namespace dealii;
       using namespace dealii::Particles;
 
       /**
@@ -47,7 +46,7 @@ namespace aspect
        * @ingroup ParticleInterpolators
        */
       template <int dim>
-      class Interface : public Plugins::InterfaceBase
+      class Interface : public ParticleInterfaceBase
       {
         public:
           /**

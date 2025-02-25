@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2018 - 2022 by the authors of the ASPECT code.
+  Copyright (C) 2018 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -29,10 +29,14 @@
 
 namespace aspect
 {
-  using namespace dealii;
-
   namespace MeshDeformation
   {
+    /**
+     * A class that represents a mesh deformation function that can be
+     * prescribed on the boundary of the domain.
+     *
+     * @ingroup MeshDeformation
+     */
     template <int dim>
     class BoundaryFunction : public Interface<dim>, public SimulatorAccess<dim>
     {

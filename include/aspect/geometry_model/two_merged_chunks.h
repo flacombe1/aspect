@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2023 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -34,9 +34,6 @@ namespace aspect
 {
   namespace GeometryModel
   {
-    using namespace dealii;
-
-
     /**
      * A geometry model class that describes a chunk of a spherical shell,
      * but with two boundary indicators per side boundary. This allows
@@ -311,7 +308,7 @@ namespace aspect
         /**
          * Give a symbolic name to the manifold id to be used by this class.
          */
-        static const types::manifold_id my_manifold_id = 15;
+        static constexpr types::manifold_id my_manifold_id = 15;
 
         /**
          * Bind boundary indicators to child cells after each mesh refinement round.

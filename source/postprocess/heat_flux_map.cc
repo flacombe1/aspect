@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2023 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -450,6 +450,13 @@ namespace aspect
             }
         return heat_flux_and_area;
       }
+    }
+
+    template <int dim>
+    void
+    HeatFluxMap<dim>::initialize ()
+    {
+      CitationInfo::add("cbfheatflux");
     }
 
 

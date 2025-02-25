@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2013 - 2023 by the authors of the ASPECT code.
+  Copyright (C) 2013 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -39,8 +39,6 @@ namespace aspect
    */
   namespace AdiabaticConditions
   {
-    using namespace dealii;
-
     /**
      * Base class for classes that describe adiabatic conditions,
      * i.e. that starts at the top of the domain and integrate

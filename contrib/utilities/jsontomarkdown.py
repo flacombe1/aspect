@@ -79,7 +79,7 @@ def escape_doc_string(text) :
     tmp = (text
            .replace("``", "&ldquo;")
            .replace("''", "&rdquo;")
-           .replace("\`", "[[[backtick]]]") # temporarily replace escaped backticks by a placeholder
+           .replace("\\`", "[[[backtick]]]") # temporarily replace escaped backticks by a placeholder
            .replace("`", "&lsquo;")
            .replace("'", "&rsquo;")
            .replace("[[[backtick]]]", "`") # and now change them to actual backticks
@@ -106,7 +106,7 @@ def escape_doc_string(text) :
 
     # Finally escape some characters that have special meaning in markdown:
     tmp = re.sub(r'\[(.*)\]\(',
-                 r'\[\1\](',
+                 r'{\1}(',
                  tmp)
 
     return tmp;

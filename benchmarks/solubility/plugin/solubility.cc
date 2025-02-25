@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2023 by the authors of the ASPECT code.
+  Copyright (C) 2023 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -32,8 +32,6 @@ namespace aspect
 {
   namespace MaterialModel
   {
-    using namespace dealii;
-
     /**
      * Volatiles material model.
      * @ingroup MaterialModels
@@ -156,7 +154,7 @@ namespace aspect
           for (unsigned int q=0; q<out.n_evaluation_points(); ++q)
             {
               const double porosity = std::max(in.composition[q][porosity_idx],0.0);
-              out.viscosities[q] *= (1.0 - porosity) * exp(- alpha_phi * porosity);
+              out.viscosities[q] *= (1.0 - porosity) * std::exp(- alpha_phi * porosity);
             }
         }
 
@@ -172,7 +170,7 @@ namespace aspect
               double porosity = std::max(in.composition[q][porosity_idx],0.0);
 
               fluid_out->fluid_viscosities[q] = eta_f;
-              fluid_out->permeabilities[q] = reference_permeability * std::pow(porosity,3) * std::pow(1.0-porosity,2);
+              fluid_out->permeabilities[q] = reference_permeability * Utilities::fixed_power<3>(porosity) * Utilities::fixed_power<2>(1.0-porosity);
 
               fluid_out->fluid_densities[q] = reference_rho_f * std::exp(fluid_compressibility * (in.pressure[q] - this->get_surface_pressure()));
 
@@ -359,7 +357,7 @@ namespace aspect
     melt_fractions (const MaterialModel::MaterialModelInputs<dim> &in,
                     std::vector<double> &melt_fractions) const
     {
-      for (unsigned int q=0; q<in.temperature.size(); ++q)
+      for (unsigned int q=0; q<in.n_evaluation_points(); ++q)
         {
           const unsigned int water_idx = this->introspection().compositional_index_for_name("water_content");
           const unsigned int porosity_idx = this->introspection().compositional_index_for_name("porosity");
@@ -387,7 +385,7 @@ namespace aspect
     reference_darcy_coefficient () const
     {
       // 0.01 = 1% melt
-      return reference_permeability * std::pow(0.01,3.0) / eta_f;
+      return reference_permeability * Utilities::fixed_power<3>(0.01) / eta_f;
     }
 
 
@@ -399,7 +397,7 @@ namespace aspect
       if (this->get_parameters().use_operator_splitting
           && out.template get_additional_output<ReactionRateOutputs<dim>>() == nullptr)
         {
-          const unsigned int n_points = out.viscosities.size();
+          const unsigned int n_points = out.n_evaluation_points();
           out.additional_outputs.push_back(
             std::make_unique<MaterialModel::ReactionRateOutputs<dim>> (n_points, this->n_compositional_fields()));
         }

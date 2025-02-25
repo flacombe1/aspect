@@ -32,8 +32,6 @@ namespace aspect
 {
   namespace BoundaryVelocity
   {
-    using namespace dealii;
-
     /**
      * A class that implements velocity boundary conditions based on a
      * functional description provided in the input file.
@@ -57,10 +55,6 @@ namespace aspect
         Tensor<1,dim>
         boundary_velocity (const types::boundary_id boundary_indicator,
                            const Point<dim> &position) const override;
-
-        // avoid -Woverloaded-virtual warning until the deprecated function
-        // is removed from the interface:
-        using Interface<dim>::boundary_velocity;
 
         /**
          * A function that is called at the beginning of each time step to

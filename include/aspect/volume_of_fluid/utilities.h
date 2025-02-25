@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2016 - 2020-2018 by the authors of the ASPECT code.
+ Copyright (C) 2016 - 2024-2018 by the authors of the ASPECT code.
 
  This file is part of ASPECT.
 
@@ -31,7 +31,20 @@ namespace aspect
   {
     namespace Utilities
     {
-      using namespace dealii;
+      /**
+       * Because many places in ASPECT assume that all functions in the namespace
+       * <code>aspect::Utilities</code> are available without qualification as
+       * <code>Utilities::function</code>, we make sure all these functions
+       * are also available inside <code>aspect::Particle::Property::Utilities</code>.
+       * This is maybe not the cleanest solution, but it is most compatible
+       * with a lot of existing code.
+       *
+       * We need to do this in every header that creates a new namespace named
+       * <code>Utilities</code>, because otherwise the compiler may not find
+       * the requested function in the current namespace and issue an error, even
+       * though the function is available in the namespace <code>aspect::Utilities</code>.
+       */
+      using namespace aspect::Utilities;
 
       /**
        * Function to calculate volume fraction contained by indicator function

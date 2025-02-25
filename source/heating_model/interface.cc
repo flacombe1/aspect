@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2023 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -59,7 +59,7 @@ namespace aspect
     bool
     Manager<dim>::adiabatic_heating_enabled() const
     {
-      return has_matching_heating_model<HeatingModel::AdiabaticHeating<dim>>() ;
+      return this->template has_matching_active_plugin<HeatingModel::AdiabaticHeating<dim>>() ;
     }
 
 
@@ -68,7 +68,7 @@ namespace aspect
     bool
     Manager<dim>::shear_heating_enabled() const
     {
-      return has_matching_heating_model<HeatingModel::ShearHeating<dim>>() ;
+      return this->template has_matching_active_plugin<HeatingModel::ShearHeating<dim>>() ;
     }
 
 
@@ -76,8 +76,8 @@ namespace aspect
     namespace
     {
       std::tuple
-      <void *,
-      void *,
+      <aspect::internal::Plugins::UnusablePluginList,
+      aspect::internal::Plugins::UnusablePluginList,
       aspect::internal::Plugins::PluginList<Interface<2>>,
       aspect::internal::Plugins::PluginList<Interface<3>>> registered_plugins;
     }
@@ -105,10 +105,10 @@ namespace aspect
       // parameters we declare here
       prm.enter_subsection ("Heating model");
       {
-        model_names
+        this->plugin_names
           = Utilities::split_string_list(prm.get("List of model names"));
 
-        AssertThrow(Utilities::has_unique_entries(model_names),
+        AssertThrow(Utilities::has_unique_entries(this->plugin_names),
                     ExcMessage("The list of strings for the parameter "
                                "'Heating model/List of model names' contains entries more than once. "
                                "This is not allowed. Please check your parameter file."));
@@ -117,12 +117,11 @@ namespace aspect
 
       // go through the list, create objects and let them parse
       // their own parameters
-      for (auto &model_name : model_names)
+      for (auto &model_name : this->plugin_names)
         {
-          this->plugin_objects.push_back (std::unique_ptr<Interface<dim>>
-                                          (std::get<dim>(registered_plugins)
-                                           .create_plugin (model_name,
-                                                           "Heating model::Model names")));
+          this->plugin_objects.emplace_back (std::get<dim>(registered_plugins)
+                                             .create_plugin (model_name,
+                                                             "Heating model::Model names"));
 
           if (SimulatorAccess<dim> *sim = dynamic_cast<SimulatorAccess<dim>*>(&*this->plugin_objects.back()))
             sim->initialize_simulator (this->get_simulator());
@@ -204,7 +203,7 @@ namespace aspect
     const std::vector<std::string> &
     Manager<dim>::get_active_heating_model_names () const
     {
-      return model_names;
+      return this->plugin_names;
     }
 
 

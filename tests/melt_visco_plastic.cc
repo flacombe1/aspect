@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2015 - 2023 by the authors of the ASPECT code.
+  Copyright (C) 2015 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -37,8 +37,6 @@ namespace aspect
 {
   namespace MaterialModel
   {
-    using namespace dealii;
-
     /**
      * Additional output fields for the plastic parameters weakened (or hardened)
      * by strain to be added to the MaterialModel::MaterialModelOutputs structure
@@ -253,8 +251,6 @@ namespace aspect
   namespace MaterialModel
   {
 
-    using namespace dealii;
-
     namespace
     {
       std::vector<std::string> make_plastic_additional_outputs_names()
@@ -305,7 +301,7 @@ namespace aspect
     reference_darcy_coefficient () const
     {
       // 0.01 = 1% melt
-      return reference_permeability * std::pow(0.01,3.0) / eta_f;
+      return reference_permeability * Utilities::fixed_power<3>(0.01) / eta_f;
     }
 
     template <int dim>
@@ -349,7 +345,7 @@ namespace aspect
       if (peridotite_melt_fraction > F_max && temperature < T_liquidus)
         {
           const double T_max = std::pow(F_max,1/beta) * (T_lherz_liquidus - T_solidus) + T_solidus;
-          peridotite_melt_fraction = F_max + (1 - F_max) * pow((temperature - T_max) / (T_liquidus - T_max),beta);
+          peridotite_melt_fraction = F_max + (1 - F_max) * std::pow((temperature - T_max) / (T_liquidus - T_max),beta);
         }
       return peridotite_melt_fraction;
     }
@@ -486,7 +482,7 @@ namespace aspect
 
               // 4) Reduce shear viscosity due to melt presence
               const double porosity = std::min(1.0, std::max(in.composition[i][porosity_idx],0.0));
-              out.viscosities[i] *= exp(- alpha_phi * porosity);
+              out.viscosities[i] *= std::exp(- alpha_phi * porosity);
             }
         }
 
@@ -534,7 +530,7 @@ namespace aspect
 
                   // Convert friction angle from degrees to radians
                   double phi = angles_internal_friction[c] * constants::degree_to_radians;
-                  const double transition_pressure = (cohesions[c] * std::cos(phi) - tensile_strength_c) / (1.0 -  sin(phi));
+                  const double transition_pressure = (cohesions[c] * std::cos(phi) - tensile_strength_c) / (1.0 -  std::sin(phi));
 
                   double yield_strength_c = 0.0;
                   // In case we're not using the Keller et al. formulation,
@@ -596,7 +592,7 @@ namespace aspect
               const unsigned int porosity_idx = this->introspection().compositional_index_for_name("porosity");
               double porosity = std::min(1.0, std::max(in.composition[i][porosity_idx],0.0));
               melt_out->fluid_viscosities[i] = eta_f;
-              melt_out->permeabilities[i] = reference_permeability * std::pow(porosity,3) * std::pow(1.0-porosity,2);
+              melt_out->permeabilities[i] = reference_permeability * Utilities::fixed_power<3>(porosity) * Utilities::fixed_power<2>(1.0-porosity);
 
               melt_out->fluid_densities[i] = out.densities[i] + melt_density_change;
               melt_out->fluid_density_gradients[i] = 0.0;

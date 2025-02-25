@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2014 - 2019 by the authors of the ASPECT code.
+  Copyright (C) 2014 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -31,8 +31,6 @@ namespace aspect
 {
   namespace HeatingModel
   {
-    using namespace dealii;
-
     /**
      * A class that implements a heating model based on a functional
      * description provided in the input file.

@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2023 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -30,8 +30,6 @@ namespace aspect
 {
   namespace GeometryModel
   {
-    using namespace dealii;
-
     /**
      * A class that describes a box geometry of certain width, height, and
      * depth (in 3d), and, possibly, topography.

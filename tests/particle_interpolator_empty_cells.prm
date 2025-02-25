@@ -65,7 +65,7 @@ end
 
 subsection Mesh refinement
   set Initial global refinement                 = 5
-  set Initial adaptive refinement               = 3
+  set Initial adaptive refinement               = 1
   set Run postprocessors on initial refinement  = true
 end
 
@@ -86,15 +86,14 @@ end
 subsection Particles
   set List of particle properties = initial composition, initial position
   set Interpolation scheme = cell average
-  set Update ghost particles = true
   set Particle generator name = random uniform
   set Minimum particles per cell = 2
   set Maximum particles per cell = 100
   set Load balancing strategy = remove and add particles
 
   subsection Generator
-    subsection Probability density function
-      set Number of particles = 2500
+    subsection Random uniform
+      set Number of particles = 3500
     end
   end
 end

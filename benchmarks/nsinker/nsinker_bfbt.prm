@@ -3,7 +3,9 @@
 # of spherical high-viscosity, high-density sinking spheres in a box geometry
 # that provide a challenge for the Stokes preconditioner. The difficulty of the
 # problem is determined by the number of sinkers and the viscosity contrast
-# between sinkers and background. In this benchmark, we use the
+# between sinkers and background.
+
+# In this file, we use the
 # weighted BFBT preconditioner introduced by Rudi et al., (2017).
 
 set Additional shared libraries            = ./libnsinker.so
@@ -14,10 +16,10 @@ set Nonlinear solver scheme                = no Advection, single Stokes
 set Max nonlinear iterations               = 1
 set Use years in output instead of seconds = false
 
-
 # Follow as closely as possible the parameters from Rudi et al. (2017)
 subsection Solver parameters
-   subsection Stokes solver parameters
+  subsection Stokes solver parameters
+    set Stokes solver type = block AMG
     set Use full A block as preconditioner              = true
     set Number of cheap Stokes solver steps             = 500
     set Maximum number of expensive Stokes solver steps = 1000
@@ -26,8 +28,9 @@ subsection Solver parameters
     set Use weighted BFBT for Schur complement          = true
     set Krylov method for cheap solver steps            = GMRES
   end
+
   subsection AMG parameters
-   set AMG aggregation threshold = 0.02
+    set AMG aggregation threshold = 0.02
   end
 end
 

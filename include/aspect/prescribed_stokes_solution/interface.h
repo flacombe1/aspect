@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2022 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -40,8 +40,6 @@ namespace aspect
    */
   namespace PrescribedStokesSolution
   {
-    using namespace dealii;
-
     /**
      * This plugin allows the user to prescribe a Stokes solution and can be
      * thought of as velocity and pressure's equivalent of the initial

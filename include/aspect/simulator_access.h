@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2023 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -42,8 +42,6 @@ namespace WorldBuilder
 
 namespace aspect
 {
-  using namespace dealii;
-
   // forward declarations:
   template <int dim> class Simulator;
   template <int dim> struct SimulatorSignals;
@@ -140,7 +138,7 @@ namespace aspect
 
   namespace Particle
   {
-    template <int dim> class World;
+    template <int dim> class Manager;
   }
 
   namespace TimeStepping
@@ -616,11 +614,11 @@ namespace aspect
       get_boundary_composition_manager () const;
 
       /**
-      * Return an reference to the manager of the boundary traction models.
-      * This can then, for example, be used to get the names of the boundary traction
-      * models used in a computation, or to compute the boundary traction
-      * for a given position.
-      */
+       * Return an reference to the manager of the boundary traction models.
+       * This can then, for example, be used to get the names of the boundary traction
+       * models used in a computation, or to compute the boundary traction
+       * for a given position.
+       */
       const BoundaryTraction::Manager<dim> &
       get_boundary_traction_manager () const;
 
@@ -931,26 +929,26 @@ namespace aspect
       get_postprocess_manager () const;
 
       /**
-       * Returns whether there is at least one particle world.
+       * Returns the number of active particle managers.
        */
       unsigned int
-      n_particle_worlds() const;
+      n_particle_managers() const;
 
       /**
-       * Returns a const reference to the particle world, in case anyone
-       * wants to query something about particles.
+       * Returns a const reference to a single particle manager given the
+       * index.
        */
-      const Particle::World<dim> &
-      get_particle_world() const;
+      const Particle::Manager<dim> &
+      get_particle_manager(const unsigned int particle_manager_index) const;
 
       /**
-       * Returns a reference to the particle world, in case anyone wants to
-       * change something within the particle world. Use with care, usually
+       * Returns a reference to a single particle manager, in case anyone wants to
+       * change something within the particle manager. Use with care, usually
        * you want to only let the functions within the particle subsystem
-       * change member variables of the particle world.
+       * change member variables of the particle manager.
        */
-      Particle::World<dim> &
-      get_particle_world();
+      Particle::Manager<dim> &
+      get_particle_manager(const unsigned int particle_manager_index);
 
       /**
        * Return true if using the block GMG Stokes solver.

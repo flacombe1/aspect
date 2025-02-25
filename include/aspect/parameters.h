@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2023 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -30,8 +30,6 @@
 
 namespace aspect
 {
-  using namespace dealii;
-
   struct CompositionalFieldDescription;
 
   // forward declaration:
@@ -538,6 +536,7 @@ namespace aspect
     unsigned int                   max_nonlinear_iterations_in_prerefinement;
     bool                           use_operator_splitting;
     std::string                    world_builder_file;
+    unsigned int                   n_particle_managers;
 
     /**
      * @}
@@ -637,14 +636,6 @@ namespace aspect
     bool                           enable_prescribed_dilation;
 
     /**
-     * Map from boundary id to a pair "components", "traction boundary type",
-     * where components is of the format "[x][y][z]" and the traction type is
-     * mapped to one of the plugins of traction boundary conditions (e.g.
-     * "function")
-     */
-    std::map<types::boundary_id, std::pair<std::string,std::string>> prescribed_traction_boundary_indicators;
-
-    /**
      * A set of boundary ids on which the boundary_heat_flux objects
      * will be applied.
      */
@@ -722,7 +713,8 @@ namespace aspect
     std::vector<bool>              use_discontinuous_composition_discretization;
     bool                           have_discontinuous_composition_discretization;
     unsigned int                   temperature_degree;
-    unsigned int                   composition_degree;
+    std::vector<unsigned int>      composition_degrees;
+    unsigned int                   max_composition_degree;
     std::string                    pressure_normalization;
     MaterialModel::MaterialAveraging::AveragingOperation material_averaging;
 

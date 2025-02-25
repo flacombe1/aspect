@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2023 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -45,8 +45,6 @@ namespace aspect
    */
   namespace HeatingModel
   {
-    using namespace dealii;
-
     /**
      * A data structure with the output field of the
      * HeatingModel::Interface::evaluate() function. The vectors are the
@@ -254,14 +252,22 @@ namespace aspect
         /**
          * Return a list of names of all heating models currently used in the
          * computation, as specified in the input file.
+         *
+         * @deprecated Use Plugins::ManagerBase::get_active_plugin_names()
+         *   instead.
          */
+        DEAL_II_DEPRECATED
         const std::vector<std::string> &
         get_active_heating_model_names () const;
 
         /**
          * Return a list of pointers to all heating models currently used in the
          * computation, as specified in the input file.
+         *
+         * @deprecated Use Plugins::ManagerBase::get_active_plugin_names()
+         *   instead.
          */
+        DEAL_II_DEPRECATED
         const std::list<std::unique_ptr<Interface<dim>>> &
         get_active_heating_models () const;
 
@@ -273,9 +279,15 @@ namespace aspect
          *
          * This function can only be called if the given template type (the first template
          * argument) is a class derived from the Interface class in this namespace.
+         *
+         * @deprecated Instead of this function, use the
+         *   Plugins::ManagerBase::has_matching_active_plugin() and
+         *   Plugins::ManagerBase::get_matching_active_plugin() functions of the base
+         *   class of the current class.
          */
         template <typename HeatingModelType,
                   typename = typename std::enable_if_t<std::is_base_of<Interface<dim>,HeatingModelType>::value>>
+        DEAL_II_DEPRECATED
         bool
         has_matching_heating_model () const;
 
@@ -289,9 +301,15 @@ namespace aspect
          *
          * This function can only be called if the given template type (the first template
          * argument) is a class derived from the Interface class in this namespace.
+         *
+         * @deprecated Instead of this function, use the
+         *   Plugins::ManagerBase::has_matching_active_plugin() and
+         *   Plugins::ManagerBase::get_matching_active_plugin() functions of the base
+         *   class of the current class.
          */
         template <typename HeatingModelType,
                   typename = typename std::enable_if_t<std::is_base_of<Interface<dim>,HeatingModelType>::value>>
+        DEAL_II_DEPRECATED
         const HeatingModelType &
         get_matching_heating_model () const;
 
@@ -317,12 +335,6 @@ namespace aspect
                         << "Could not find entry <"
                         << arg1
                         << "> among the names of registered heating model objects.");
-      private:
-        /**
-         * A list of names of heating model objects that have been requested
-         * in the parameter file.
-         */
-        std::vector<std::string> model_names;
     };
 
 
@@ -333,7 +345,7 @@ namespace aspect
     bool
     Manager<dim>::has_matching_heating_model () const
     {
-      return this->template has_matching_plugin_object<HeatingModelType>();
+      return this->template has_matching_active_plugin<HeatingModelType>();
     }
 
 
@@ -343,7 +355,7 @@ namespace aspect
     const HeatingModelType &
     Manager<dim>::get_matching_heating_model () const
     {
-      return this->template get_matching_plugin_object<HeatingModelType>();
+      return this->template get_matching_active_plugin<HeatingModelType>();
     }
 
 

@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2023 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -38,8 +38,6 @@
 
 namespace aspect
 {
-  using namespace dealii;
-
   template <int dim> class Simulator;
   template <int dim> class SimulatorAccess;
 
@@ -110,8 +108,9 @@ namespace aspect
          * of course needs to be able to access these other postprocessors.
          * This can be done by deriving your postprocessor from
          * SimulatorAccess, and then using the
-         * SimulatorAccess::get_postprocess_manager::get_matching_postprocessor
-         * function.
+         * SimulatorAccess::get_postprocess_manager() function, followed
+         * by asking the resulting object via get_matching_active_plugin()
+         * for a specific postprocessor object.
          */
         virtual
         std::list<std::string>
@@ -193,9 +192,15 @@ namespace aspect
          *
          * This function can only be called if the given template type (the first template
          * argument) is a class derived from the Interface class in this namespace.
+         *
+         * @deprecated Instead of this function, use the
+         *   Plugins::ManagerBase::has_matching_active_plugin() and
+         *   Plugins::ManagerBase::get_matching_active_plugin() functions of the base
+         *   class of the current class.
          */
         template <typename PostprocessorType,
                   typename = typename std::enable_if_t<std::is_base_of<Interface<dim>,PostprocessorType>::value>>
+        DEAL_II_DEPRECATED
         bool
         has_matching_postprocessor () const;
 
@@ -209,9 +214,15 @@ namespace aspect
          *
          * This function can only be called if the given template type (the first template
          * argument) is a class derived from the Interface class in this namespace.
+         *
+         * @deprecated Instead of this function, use the
+         *   Plugins::ManagerBase::has_matching_active_plugin() and
+         *   Plugins::ManagerBase::get_matching_active_plugin() functions of the base
+         *   class of the current class.
          */
         template <typename PostprocessorType,
                   typename = typename std::enable_if_t<std::is_base_of<Interface<dim>,PostprocessorType>::value>>
+        DEAL_II_DEPRECATED
         const PostprocessorType &
         get_matching_postprocessor () const;
 
@@ -339,7 +350,7 @@ namespace aspect
     bool
     Manager<dim>::has_matching_postprocessor () const
     {
-      return this->template has_matching_plugin_object<PostprocessorType>();
+      return this->template has_matching_active_plugin<PostprocessorType>();
     }
 
 
@@ -350,7 +361,7 @@ namespace aspect
     const PostprocessorType &
     Manager<dim>::get_matching_postprocessor () const
     {
-      return this->template get_matching_plugin_object<PostprocessorType>();
+      return this->template get_matching_active_plugin<PostprocessorType>();
     }
 
 

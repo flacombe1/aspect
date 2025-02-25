@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2019 - 2021 by the authors of the ASPECT code.
+  Copyright (C) 2019 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -32,8 +32,6 @@ namespace aspect
 {
   namespace MaterialModel
   {
-    using namespace dealii;
-
     namespace Rheology
     {
       /**
@@ -103,7 +101,7 @@ namespace aspect
           /**
            * @deprecated: Deprecated version of the function of the same
            * name described above.
-          */
+           */
           DEAL_II_DEPRECATED
           std::array<double, 3>
           compute_strain_weakening_factors(const unsigned int j,
@@ -145,7 +143,7 @@ namespace aspect
 
           /**
            * Whether to use the temperature-activated viscous strain weakening.
-          */
+           */
           bool use_temperature_activated_strain_softening;
 
           /**

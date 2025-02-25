@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2014 - 2020 by the authors of the ASPECT code.
+  Copyright (C) 2014 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -32,8 +32,6 @@ namespace aspect
 {
   namespace GravityModel
   {
-    using namespace dealii;
-
     /**
      * A class that implements gravity based on a functional description
      * provided in the input file.

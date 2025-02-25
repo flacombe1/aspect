@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2022 - 2023 by the authors of the ASPECT code.
+  Copyright (C) 2022 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -27,8 +27,6 @@ namespace aspect
 {
   namespace MaterialModel
   {
-    using namespace dealii;
-
     template <int dim>
     class MagneticStripes : public MaterialModel::CompositionReaction<dim>
     {
@@ -63,7 +61,7 @@ namespace aspect
               break;
             }
 
-      for (unsigned int i=0; i < in.position.size(); ++i)
+      for (unsigned int i=0; i < in.n_evaluation_points(); ++i)
         {
           const double depth = this->get_geometry_model().depth(in.position[i]);
           const double reaction_depth = 7000.0;

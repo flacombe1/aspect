@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2023 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -27,7 +27,6 @@
 #include <aspect/newton.h>
 #include <aspect/stokes_matrix_free.h>
 #include <aspect/mesh_deformation/interface.h>
-#include <aspect/citation_info.h>
 #include <aspect/postprocess/particles.h>
 
 #ifdef ASPECT_WITH_WORLD_BUILDER
@@ -190,12 +189,12 @@ namespace aspect
                    nullptr),
 #endif
     boundary_heat_flux (BoundaryHeatFlux::create_boundary_heat_flux<dim>(prm)),
-    particle_world(nullptr),
     time (numbers::signaling_nan<double>()),
     time_step (numbers::signaling_nan<double>()),
     old_time_step (numbers::signaling_nan<double>()),
     timestep_number (numbers::invalid_unsigned_int),
     nonlinear_iteration (numbers::invalid_unsigned_int),
+    nonlinear_solver_failures (0),
 
     // We need to disable eliminate_refined_boundary_islands as this leads to
     // a deadlock for deal.II <= 9.2.0 as described in
@@ -447,14 +446,24 @@ namespace aspect
     postprocess_manager.initialize_simulator (*this);
     postprocess_manager.parse_parameters (prm);
 
-    if (postprocess_manager.template has_matching_postprocessor<Postprocess::Particles<dim>>())
+    if (postprocess_manager.template has_matching_active_plugin<Postprocess::Particles<dim>>())
       {
-        particle_world = std::make_unique<Particle::World<dim>>();
-        if (SimulatorAccess<dim> *sim = dynamic_cast<SimulatorAccess<dim>*>(particle_world.get()))
-          sim->initialize_simulator (*this);
+        particle_managers.resize(parameters.n_particle_managers);
 
-        particle_world->parse_parameters(prm,0);
-        particle_world->initialize();
+        AssertThrow(particle_managers.size() <= ASPECT_MAX_NUM_PARTICLE_SYSTEMS,
+                    ExcMessage("You have selected " + std::to_string(particle_managers.size()) + " particle managers, but ASPECT "
+                               "has been compiled with a maximum of " + std::to_string(ASPECT_MAX_NUM_PARTICLE_SYSTEMS) + ". "
+                               "Please recompile ASPECT with a higher value for ASPECT_MAX_NUM_PARTICLE_SYSTEMS. You can set a higher number "
+                               "specifying the CMake variable -DASPECT_MAX_NUM_PARTICLE_SYSTEMS=<number>"));
+
+        for (unsigned int particle_manager_index = 0 ; particle_manager_index < particle_managers.size(); ++particle_manager_index)
+          {
+            if (SimulatorAccess<dim> *sim = dynamic_cast<SimulatorAccess<dim>*>(&particle_managers[particle_manager_index]))
+              sim->initialize_simulator (*this);
+
+            particle_managers[particle_manager_index].parse_parameters(prm,particle_manager_index);
+            particle_managers[particle_manager_index].initialize();
+          }
       }
 
     mesh_refinement_manager.initialize_simulator (*this);
@@ -495,8 +504,8 @@ namespace aspect
 
     std::set<types::boundary_id> open_velocity_boundary_indicators
       = geometry_model->get_used_boundary_indicators();
-    for (const auto &p : boundary_velocity_manager.get_active_boundary_velocity_names())
-      open_velocity_boundary_indicators.erase (p.first);
+    for (const auto p : boundary_velocity_manager.get_prescribed_boundary_velocity_indicators())
+      open_velocity_boundary_indicators.erase (p);
     for (const auto p : boundary_velocity_manager.get_zero_boundary_velocity_indicators())
       open_velocity_boundary_indicators.erase (p);
     for (const auto p : boundary_velocity_manager.get_tangential_boundary_velocity_indicators())
@@ -535,7 +544,7 @@ namespace aspect
         AssertThrow (prm_out,
                      ExcMessage (std::string("Could not open file <") +
                                  parameters.output_directory + "parameters.prm>."));
-        prm.print_parameters(prm_out, ParameterHandler::Text);
+        prm.print_parameters(prm_out, ParameterHandler::PRM);
 
         std::ofstream json_out ((parameters.output_directory + "parameters.json"));
         AssertThrow (json_out,
@@ -565,11 +574,11 @@ namespace aspect
   template <int dim>
   Simulator<dim>::~Simulator ()
   {
-    // The particle_world object is declared before the triangulation, and so
+    // The particle_manager object is declared before the triangulation, and so
     // is destroyed after the latter. But it stores a pointer to the
     // triangulation and uses it during destruction. This results in
     // trouble. So destroy it first.
-    particle_world.reset();
+    particle_managers.clear();
 
     // wait if there is a thread that's still writing the statistics
     // object (set from the output_statistics() function)
@@ -609,8 +618,9 @@ namespace aspect
 
     // Copy particle handler to restore particle location and properties
     // before repeating a timestep
-    if (particle_world.get() != nullptr)
-      particle_world->backup_particles();
+    for (auto &particle_manager : particle_managers)
+      particle_manager.backup_particles();
+
 
     // then interpolate the current boundary velocities. copy constraints
     // into current_constraints and then add to current_constraints
@@ -643,8 +653,8 @@ namespace aspect
     if (prescribed_stokes_solution.get())
       prescribed_stokes_solution->update();
 
-    if (particle_world.get() != nullptr)
-      particle_world->update();
+    for (auto &particle_manager : particle_managers)
+      particle_manager.update();
 
     // do the same for the traction boundary conditions and other things
     // that end up in the bilinear form. we update those that end up in
@@ -882,28 +892,38 @@ namespace aspect
 
 
     template <int dim>
+    bool compositional_field_needs_matrix_block(const Introspection<dim> &introspection, const unsigned int composition_index)
+    {
+      const typename Simulator<dim>::AdvectionField adv_field (Simulator<dim>::AdvectionField::composition(composition_index));
+      switch (adv_field.advection_method(introspection))
+        {
+          case Parameters<dim>::AdvectionFieldMethod::fem_field:
+          case Parameters<dim>::AdvectionFieldMethod::fem_melt_field:
+          case Parameters<dim>::AdvectionFieldMethod::fem_darcy_field:
+          case Parameters<dim>::AdvectionFieldMethod::prescribed_field_with_diffusion:
+            return true;
+          case Parameters<dim>::AdvectionFieldMethod::particles:
+          case Parameters<dim>::AdvectionFieldMethod::volume_of_fluid:
+          case Parameters<dim>::AdvectionFieldMethod::static_field:
+          case Parameters<dim>::AdvectionFieldMethod::prescribed_field:
+            break;
+          default:
+            Assert (false, ExcNotImplemented());
+        }
+      return false;
+    }
+
+
+
+    template <int dim>
     bool compositional_fields_need_matrix_block(const Introspection<dim> &introspection)
     {
       // Check if any compositional field method actually requires a matrix block
       // (as opposed to all are advected by other means or prescribed fields)
       for (unsigned int c=0; c<introspection.n_compositional_fields; ++c)
         {
-          const typename Simulator<dim>::AdvectionField adv_field (Simulator<dim>::AdvectionField::composition(c));
-          switch (adv_field.advection_method(introspection))
-            {
-              case Parameters<dim>::AdvectionFieldMethod::fem_field:
-              case Parameters<dim>::AdvectionFieldMethod::fem_melt_field:
-              case Parameters<dim>::AdvectionFieldMethod::fem_darcy_field:
-              case Parameters<dim>::AdvectionFieldMethod::prescribed_field_with_diffusion:
-                return true;
-              case Parameters<dim>::AdvectionFieldMethod::particles:
-              case Parameters<dim>::AdvectionFieldMethod::volume_of_fluid:
-              case Parameters<dim>::AdvectionFieldMethod::static_field:
-              case Parameters<dim>::AdvectionFieldMethod::prescribed_field:
-                break;
-              default:
-                Assert (false, ExcNotImplemented());
-            }
+          if (compositional_field_needs_matrix_block(introspection, c))
+            return true;
         }
       return false;
     }
@@ -1011,11 +1031,21 @@ namespace aspect
         &&
         compositional_fields_need_matrix_block(introspection))
       {
-        // If we need at least one compositional field block, we
-        // create a matrix block in the first compositional block. Its sparsity
-        // pattern will later be used to allocate composition matrices as
-        // needed. All other matrix blocks are left empty to save memory.
-        coupling[x.compositional_fields[0]][x.compositional_fields[0]] = DoFTools::always;
+        // We reuse matrix blocks for compositional fields, but we need different blocks for each base_element.
+        // All other matrix blocks are left empty to save memory.
+        for (const unsigned int base_element_index : introspection.get_composition_base_element_indices())
+          {
+            bool block_needed = false;
+            for (const unsigned int c : introspection.get_compositional_field_indices_with_base_element(base_element_index))
+              if (compositional_field_needs_matrix_block(introspection, c))
+                block_needed = true;
+
+            if (block_needed)
+              {
+                const unsigned int first_c = introspection.get_compositional_field_indices_with_base_element(base_element_index).front();
+                coupling[x.compositional_fields[first_c]][x.compositional_fields[first_c]] = DoFTools::always;
+              }
+          }
       }
 
     // If we are using volume of fluid interface tracking, create a matrix block in the
@@ -1063,10 +1093,20 @@ namespace aspect
             parameters.temperature_method != Parameters<dim>::AdvectionFieldMethod::static_field)
           face_coupling[x.temperature][x.temperature] = DoFTools::always;
 
-        if (parameters.have_discontinuous_composition_discretization &&
-            solver_scheme_solves_advection_equations(parameters) &&
-            compositional_fields_need_matrix_block(introspection))
-          face_coupling[x.compositional_fields[0]][x.compositional_fields[0]] = DoFTools::always;
+        for (const unsigned int base_element_index : introspection.get_composition_base_element_indices())
+          {
+            bool block_needed = false;
+            for (const unsigned int c : introspection.get_compositional_field_indices_with_base_element(base_element_index))
+              if (compositional_field_needs_matrix_block(introspection, c))
+                block_needed = true;
+
+            const unsigned int first_c = introspection.get_compositional_field_indices_with_base_element(base_element_index).front();
+
+            if (parameters.use_discontinuous_composition_discretization[first_c]
+                && solver_scheme_solves_advection_equations(parameters)
+                && block_needed)
+              face_coupling[x.compositional_fields[first_c]][x.compositional_fields[first_c]] = DoFTools::always;
+          }
 
         if (parameters.volume_of_fluid_tracking_enabled)
           {
@@ -1083,9 +1123,7 @@ namespace aspect
                                               Utilities::MPI::
                                               this_mpi_process(mpi_communicator));
 
-        if (solver_scheme_solves_advection_equations(parameters)
-            &&
-            compositional_fields_need_matrix_block(introspection))
+        if (solver_scheme_solves_advection_equations(parameters))
           {
             // If we solve for more than one compositional field make sure we keep constrained entries
             // to allow different boundary conditions for different fields. In order to keep constrained
@@ -1095,20 +1133,24 @@ namespace aspect
                                                              introspection.n_components);
             composition_coupling.fill (DoFTools::none);
 
-            const unsigned int component = introspection.component_indices.compositional_fields[0];
-            composition_coupling[component][component] = coupling[component][component];
+            for (const unsigned int base_element_index : introspection.get_composition_base_element_indices())
+              {
+                const unsigned int first_c = introspection.get_compositional_field_indices_with_base_element(base_element_index).front();
+                const unsigned int component = x.compositional_fields[first_c];
+                composition_coupling[component][component] = coupling[component][component];
 
-            const unsigned int block = introspection.get_components_to_blocks()[component];
-            sp.block(block,block).reinit(sp.block(block,block).locally_owned_range_indices(),
-                                         sp.block(block,block).locally_owned_domain_indices());
+                const unsigned int block = introspection.block_indices.compositional_field_sparsity_pattern[first_c];
+                sp.block(block,block).reinit(sp.block(block,block).locally_owned_range_indices(),
+                                             sp.block(block,block).locally_owned_domain_indices());
 
-            DoFTools::make_flux_sparsity_pattern (dof_handler,
-                                                  sp,
-                                                  current_constraints, true,
-                                                  composition_coupling,
-                                                  face_coupling,
-                                                  Utilities::MPI::
-                                                  this_mpi_process(mpi_communicator));
+                DoFTools::make_flux_sparsity_pattern (dof_handler,
+                                                      sp,
+                                                      current_constraints, true,
+                                                      composition_coupling,
+                                                      face_coupling,
+                                                      Utilities::MPI::
+                                                      this_mpi_process(mpi_communicator));
+              }
           }
       }
     else
@@ -1332,67 +1374,28 @@ namespace aspect
     // set the current time and do the interpolation
     // for the prescribed velocity fields
     boundary_velocity_manager.update();
-    for (const auto &p : boundary_velocity_manager.get_active_boundary_velocity_names())
+
+    // put boundary conditions into constraints object for each boundary
+    for (const auto boundary_id: boundary_velocity_manager.get_prescribed_boundary_velocity_indicators())
       {
         Utilities::VectorFunctionFromVelocityFunctionObject<dim> vel
         (introspection.n_components,
          [&] (const dealii::Point<dim> &x) -> Tensor<1,dim>
         {
-          return boundary_velocity_manager.boundary_velocity(p.first, x);
+          if (!assemble_newton_stokes_system || (assemble_newton_stokes_system && nonlinear_iteration == 0))
+            return boundary_velocity_manager.boundary_velocity(boundary_id, x);
+          else
+            return Tensor<1,dim>();
+
+          return Tensor<1,dim>();
         });
 
-        // here we create a mask for interpolate_boundary_values out of the 'selector'
-        std::vector<bool> mask(introspection.component_masks.velocities.size(), false);
-        const std::string &comp = p.second.first;
-
-        if (comp.length()>0)
-          {
-            for (const char direction : comp)
-              {
-                switch (direction)
-                  {
-                    case 'x':
-                      mask[introspection.component_indices.velocities[0]] = true;
-                      break;
-                    case 'y':
-                      mask[introspection.component_indices.velocities[1]] = true;
-                      break;
-                    case 'z':
-                      // we must be in 3d, or 'z' should never have gotten through
-                      Assert (dim==3, ExcInternalError());
-                      if (dim==3)
-                        mask[introspection.component_indices.velocities[dim-1]] = true;
-                      break;
-                    default:
-                      Assert (false, ExcInternalError());
-                  }
-              }
-          }
-        else
-          {
-            // no mask given -- take all velocities
-            for (unsigned int i=0; i<introspection.component_masks.velocities.size(); ++i)
-              mask[i]=introspection.component_masks.velocities[i];
-          }
-
-        if (!assemble_newton_stokes_system || (assemble_newton_stokes_system && nonlinear_iteration == 0))
-          {
-            VectorTools::interpolate_boundary_values (*mapping,
-                                                      dof_handler,
-                                                      p.first,
-                                                      vel,
-                                                      constraints,
-                                                      ComponentMask(mask));
-          }
-        else
-          {
-            VectorTools::interpolate_boundary_values (*mapping,
-                                                      dof_handler,
-                                                      p.first,
-                                                      Functions::ZeroFunction<dim>(introspection.n_components),
-                                                      constraints,
-                                                      ComponentMask(mask));
-          }
+        VectorTools::interpolate_boundary_values (*mapping,
+                                                  dof_handler,
+                                                  boundary_id,
+                                                  vel,
+                                                  constraints,
+                                                  boundary_velocity_manager.get_component_mask(boundary_id));
       }
   }
 
@@ -1529,8 +1532,12 @@ namespace aspect
       IndexSet system_index_set = dof_handler.locally_owned_dofs();
       introspection.index_sets.system_partitioning = system_index_set.split_by_block(introspection.system_dofs_per_block);
 
+#if DEAL_II_VERSION_GTE(9,7,0)
+      introspection.index_sets.system_relevant_set = DoFTools::extract_locally_relevant_dofs (dof_handler);
+#else
       DoFTools::extract_locally_relevant_dofs (dof_handler,
                                                introspection.index_sets.system_relevant_set);
+#endif
       introspection.index_sets.system_relevant_partitioning =
         introspection.index_sets.system_relevant_set.split_by_block(introspection.system_dofs_per_block);
 
@@ -1942,11 +1949,19 @@ namespace aspect
       {
         pcout << "\nWARNING: The nonlinear solver in the current timestep failed to converge." << std::endl
               << "Acting according to the parameter 'Nonlinear solver failure strategy'..." << std::endl;
+<<<<<<< HEAD
+=======
+        ++nonlinear_solver_failures;
+>>>>>>> 76bb6643a816b5eec55a498136343a2caa4c8579
 
         switch (parameters.nonlinear_solver_failure_strategy)
           {
             case Parameters<dim>::NonlinearSolverFailureStrategy::continue_with_next_timestep:
             {
+<<<<<<< HEAD
+=======
+              pcout << "Continuing to the next timestep even though solution is not fully converged." << std::endl;
+>>>>>>> 76bb6643a816b5eec55a498136343a2caa4c8579
               // do nothing and continue
               break;
             }
@@ -1958,11 +1973,19 @@ namespace aspect
                         << std::endl;
                   throw;
                 }
+<<<<<<< HEAD
               time_stepping_manager.template get_matching_plugin<TimeStepping::RepeatOnNonlinearFail<dim>>().nonlinear_solver_has_failed();
+=======
+              time_stepping_manager.template get_matching_active_plugin<TimeStepping::RepeatOnNonlinearFail<dim>>().nonlinear_solver_has_failed();
+>>>>>>> 76bb6643a816b5eec55a498136343a2caa4c8579
               break;
             }
             case Parameters<dim>::NonlinearSolverFailureStrategy::abort_program:
             {
+<<<<<<< HEAD
+=======
+              pcout << "Aborting simulation as requested." << std::endl;
+>>>>>>> 76bb6643a816b5eec55a498136343a2caa4c8579
               // rethrow the current exception
               throw;
             }
@@ -2113,17 +2136,17 @@ namespace aspect
             && !parameters.run_postprocessors_on_nonlinear_iterations)
           postprocess ();
 
+        // if the time stepping manager tells us to refine the mesh,
+        // we need to do this before going to the next time step
         if (time_stepping_manager.should_refine_mesh())
           {
             pcout << "Refining the mesh based on the time stepping manager ...\n" << std::endl;
             refine_mesh(max_refinement_level);
           }
-        else
-          maybe_refine_mesh(new_time_step_size, max_refinement_level);
 
         if (time_stepping_manager.should_repeat_time_step())
           {
-            pcout << "Repeating the current time step based on the time stepping manager ..." << std::endl;
+            pcout << "Repeating the current time step based on the time stepping manager ...\n" << std::endl;
 
             if (mesh_deformation)
               mesh_deformation->mesh_displacements = mesh_deformation->old_mesh_displacements;
@@ -2135,11 +2158,14 @@ namespace aspect
             // Restore particles through stored copy of particle handler,
             // created in start_timestep(),
             // but only if this timestep is to be repeated.
-            if (particle_world.get() != nullptr)
-              particle_world->restore_particles();
+            for (auto &particle_manager : particle_managers)
+              particle_manager.restore_particles();
 
             continue; // repeat time step loop
           }
+
+        if (!time_stepping_manager.should_refine_mesh())
+          maybe_refine_mesh(new_time_step_size, max_refinement_level);
 
         // see if we want to write a timing summary
         maybe_write_timing_output();
@@ -2168,8 +2194,11 @@ namespace aspect
     // throwing an exception. Therefore, we have to do this manually here:
     computing_timer.print_summary ();
 
+    if (nonlinear_solver_failures > 0)
+      pcout << "\nWARNING: During this computation " << nonlinear_solver_failures << " nonlinear solver failures occurred!" << std::endl;
+
     pcout << "-- Total wallclock time elapsed including restarts: "
-          << round(wall_timer.wall_time()+total_walltime_until_last_snapshot)
+          << std::round(wall_timer.wall_time()+total_walltime_until_last_snapshot)
           << 's' << std::endl;
 
     CitationInfo::print_info_block (pcout);

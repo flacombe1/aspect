@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2016 - 2022 by the authors of the ASPECT code.
+  Copyright (C) 2016 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -44,10 +44,10 @@ namespace aspect
       return numbers::signaling_nan<double>();
 
     // record maximal entropy on Gauss quadrature points
-    const Quadrature<dim> &quadrature_formula
-      = (advection_field.is_temperature() ?
-         introspection.quadratures.temperature :
-         introspection.quadratures.compositional_fields);
+    const Quadrature<dim> &quadrature_formula =
+      (advection_field.is_temperature() ?
+       introspection.quadratures.temperature :
+       introspection.quadratures.compositional_fields[advection_field.compositional_variable]);
     const unsigned int n_q_points = quadrature_formula.size();
 
     const FEValuesExtractors::Scalar field = advection_field.scalar_extractor(introspection);
@@ -650,7 +650,7 @@ namespace aspect
                 // important, as long as the result is still a valid number. Note that this
                 // is only important if \|u\| and eps are zero.
                 const double peclet = peclet_times_eps / (eps + 1e-100);
-                const double coth_of_peclet = (1.0 + exp(-2.0*peclet)) / (1.0 - exp(-2.0*peclet));
+                const double coth_of_peclet = (1.0 + std::exp(-2.0*peclet)) / (1.0 - std::exp(-2.0*peclet));
                 const double delta = h/(2.0*norm_of_advection_term*fe_order) * (coth_of_peclet - 1.0/peclet);
                 viscosity_per_cell[cell->active_cell_index()] = delta;
               }

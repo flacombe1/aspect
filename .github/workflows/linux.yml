@@ -23,7 +23,7 @@ jobs:
   linux-nounity:
     #linux build with unity/precompiled headers disabled
     name: no-unity-build
-    runs-on: [ubuntu-20.04]
+    runs-on: [ubuntu-22.04]
 
     steps:
     - uses: actions/checkout@v4
@@ -38,24 +38,21 @@ jobs:
       run: |
         mkdir build-no-unity
         cd build-no-unity
-        cmake -D CMAKE_BUILD_TYPE=Debug -D ASPECT_PRECOMPILE_HEADERS=OFF -D ASPECT_UNITY_BUILD=OFF -D CMAKE_CXX_FLAGS='-Werror' ..
-        make -j 2
+        cmake -D CMAKE_BUILD_TYPE=Debug -D ASPECT_PRECOMPILE_HEADERS=OFF -D ASPECT_UNITY_BUILD=OFF -D CMAKE_CXX_FLAGS='-Werror' -D ASPECT_ADDITIONAL_CXX_FLAGS='-Wdeprecated-declarations' ..
+        make -j 4
         ./aspect --test
 
   linux:
     #linux build including indent, examples and documentation
     name: indent+documentation
-    runs-on: [ubuntu-20.04]
+    runs-on: [ubuntu-24.04]
 
     steps:
     - uses: actions/checkout@v4
     - name: setup
       run: |
         sudo apt-get update
-        sudo apt-get install -y software-properties-common
-        sudo add-apt-repository ppa:ginggs/deal.ii-9.5.1-backports
-        sudo apt-get update
-        sudo apt-get install -yq --no-install-recommends texlive-plain-generic texlive-base texlive-latex-recommended texlive-latex-base texlive-fonts-recommended texlive-bibtex-extra lmodern texlive-latex-extra texlive-science graphviz python3-pip python-setuptools libdeal.ii-dev doxygen latexmk biber inkscape
+        sudo apt-get install -yq --no-install-recommends texlive-plain-generic texlive-base texlive-latex-recommended texlive-latex-base texlive-fonts-recommended texlive-bibtex-extra lmodern texlive-latex-extra texlive-science graphviz python3-pip libdeal.ii-dev doxygen latexmk biber inkscape
         doxygen --version
 
         wget https://github.com/tjhei/astyle/releases/download/v2.04/astyle_2.04_linux.tar.gz
@@ -89,7 +86,7 @@ jobs:
         cd build
         /usr/bin/cmake -D CMAKE_BUILD_TYPE=Debug -D ASPECT_PRECOMPILE_HEADERS=ON -D ASPECT_UNITY_BUILD=ON \
                        -D CMAKE_CXX_FLAGS='-Werror' -D ASPECT_INSTALL_EXAMPLES=ON ..
-        make -j 2
+        make -j 4
         ./aspect --test
     - name: doc
       run: |
@@ -130,7 +127,7 @@ jobs:
         -D CMAKE_BUILD_TYPE=Debug \
         -G 'Ninja' \
         -D CMAKE_CXX_FLAGS='-Werror' \
-        -D ASPECT_ADDITIONAL_CXX_FLAGS='-O3' \
+        -D ASPECT_ADDITIONAL_CXX_FLAGS='-O3 -Wdeprecated-declarations' \
         -D ASPECT_TEST_GENERATOR='Ninja' \
         -D ASPECT_PRECOMPILE_HEADERS=ON \
         -D ASPECT_UNITY_BUILD=ON \
@@ -138,7 +135,7 @@ jobs:
         -D ASPECT_COMPARE_TEST_RESULTS='${{ matrix.compare-tests }}' \
         -D CMAKE_UNITY_BUILD_BATCH_SIZE=8 \
         ..
-        ninja -j 2
+        ninja -j 4
         ./aspect --test
     - name: prebuild tests
       run: |

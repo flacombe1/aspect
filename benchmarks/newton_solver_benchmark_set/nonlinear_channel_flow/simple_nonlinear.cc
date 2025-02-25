@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2023 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -31,8 +31,6 @@ namespace aspect
 {
   namespace MaterialModel
   {
-    using namespace dealii;
-
     /**
      * A material model based on a simple power law rheology and
      * implementing the derivatives needed for the Newton method.
@@ -109,8 +107,6 @@ namespace aspect
 }
 
 
-
-using namespace dealii;
 
 namespace aspect
 {

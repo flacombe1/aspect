@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2016 - 2021 by the authors of the ASPECT code.
+  Copyright (C) 2016 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -30,8 +30,6 @@
 
 namespace aspect
 {
-  using namespace dealii;
-
   namespace MaterialModel
   {
     /**
@@ -45,7 +43,7 @@ namespace aspect
       public:
         /**
          * Constructor. When the MeltInputs are created,
-         * all properties are initialized with signalingNaNs.
+         * all properties are initialized with signaling NaNs.
          * This means that individual heating or material models
          * can all attach the plugins they need, and in a later
          * step they will all be filled together (using the fill
@@ -76,15 +74,16 @@ namespace aspect
     class MeltOutputs : public AdditionalMaterialOutputs<dim>
     {
       public:
+        /**
+         * Constructor. When the MeltOutputs are created,
+         * all properties are initialized with signaling NaNs.
+         * This means that after the call to the material model
+         * it can be checked if the material model actually
+         * computed the values, by checking if the individual
+         * values are finite (using std::isfinite).
+         */
         MeltOutputs (const unsigned int n_points,
-                     const unsigned int /*n_comp*/)
-        {
-          compaction_viscosities.resize(n_points);
-          fluid_viscosities.resize(n_points);
-          permeabilities.resize(n_points);
-          fluid_densities.resize(n_points);
-          fluid_density_gradients.resize(n_points, Tensor<1,dim>());
-        }
+                     const unsigned int n_comp);
 
         /**
          * Compaction viscosity values $\xi$ at the given positions.
@@ -486,7 +485,7 @@ namespace aspect
        */
       void compute_melt_variables(LinearAlgebra::BlockSparseMatrix &system_matrix,
                                   LinearAlgebra::BlockVector &solution,
-                                  LinearAlgebra::BlockVector &system_rhs);
+                                  LinearAlgebra::BlockVector &system_rhs) const;
 
       /**
        * Return whether this object refers to the porosity field.

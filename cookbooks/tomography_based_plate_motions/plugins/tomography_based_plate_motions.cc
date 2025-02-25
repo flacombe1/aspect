@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2023 by the authors of the ASPECT code.
+  Copyright (C) 2023 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -32,8 +32,6 @@
 #include <deal.II/base/signaling_nan.h>
 
 #include <iostream>
-
-using namespace dealii;
 
 namespace aspect
 {
@@ -306,7 +304,7 @@ namespace aspect
         out.template get_additional_output<MaterialModel::UnscaledViscosityAdditionalOutputs<dim>>();
 
       const InitialTemperature::AdiabaticBoundary<dim> &adiabatic_boundary =
-        initial_temperature_manager->template get_matching_initial_temperature_model<InitialTemperature::AdiabaticBoundary<dim>>();
+        initial_temperature_manager->template get_matching_active_plugin<InitialTemperature::AdiabaticBoundary<dim>>();
 
       const unsigned int surface_boundary_id = this->get_geometry_model().translate_symbolic_boundary_name_to_id("outer");
 
@@ -725,8 +723,8 @@ namespace aspect
       if (this->get_adiabatic_conditions().is_initialized())
         {
           const double adiabatic_energy_term
-            = exp((dislocation_activation_energy[phase_index] + dislocation_activation_volume[phase_index] * pressure)
-                  / (dislocation_creep_exponent[phase_index] * constants::gas_constant * this->get_adiabatic_conditions().temperature(position)));
+            = std::exp((dislocation_activation_energy[phase_index] + dislocation_activation_volume[phase_index] * pressure)
+                       / (dislocation_creep_exponent[phase_index] * constants::gas_constant * this->get_adiabatic_conditions().temperature(position)));
 
           Assert(adiabatic_energy_term > 0.0,
                  ExcMessage("Adiabatic energy term has to be positive for dislocation creep. Instead it is: " + std::to_string(adiabatic_energy_term)));
@@ -897,7 +895,7 @@ namespace aspect
           = this->get_initial_temperature_manager_pointer();
 
       const InitialTemperature::AdiabaticBoundary<dim> &adiabatic_boundary =
-        initial_temperature_manager->template get_matching_initial_temperature_model<InitialTemperature::AdiabaticBoundary<dim>>();
+        initial_temperature_manager->template get_matching_active_plugin<InitialTemperature::AdiabaticBoundary<dim>>();
 
       // This function will fill the outputs for grain size, viscosity, and dislocation viscosity
       if (in.requests_property(MaterialProperties::viscosity))
@@ -1635,7 +1633,7 @@ namespace aspect
       // reduce grain size.
       if (out.template get_additional_output<DislocationViscosityOutputs<dim>>() == nullptr)
         {
-          const unsigned int n_points = out.viscosities.size();
+          const unsigned int n_points = out.n_evaluation_points();
           out.additional_outputs.push_back(
             std::make_unique<MaterialModel::DislocationViscosityOutputs<dim>> (n_points));
         }
@@ -1643,7 +1641,7 @@ namespace aspect
       // We need the prescribed field outputs to interpolate the grain size onto a compositional field.
       if (out.template get_additional_output<PrescribedFieldOutputs<dim>>() == nullptr)
         {
-          const unsigned int n_points = out.viscosities.size();
+          const unsigned int n_points = out.n_evaluation_points();
           out.additional_outputs.push_back(
             std::make_unique<MaterialModel::PrescribedFieldOutputs<dim>> (n_points, this->n_compositional_fields()));
         }
@@ -1652,7 +1650,7 @@ namespace aspect
       if (use_table_properties
           && out.template get_additional_output<SeismicAdditionalOutputs<dim>>() == nullptr)
         {
-          const unsigned int n_points = out.viscosities.size();
+          const unsigned int n_points = out.n_evaluation_points();
           out.additional_outputs.push_back(
             std::make_unique<MaterialModel::SeismicAdditionalOutputs<dim>> (n_points));
         }
@@ -1660,7 +1658,7 @@ namespace aspect
       if (this->get_parameters().temperature_method == Parameters<dim>::AdvectionFieldMethod::prescribed_field &&
           out.template get_additional_output<PrescribedTemperatureOutputs<dim>>() == nullptr)
         {
-          const unsigned int n_points = out.viscosities.size();
+          const unsigned int n_points = out.n_evaluation_points();
           out.additional_outputs.push_back(
             std::make_unique<MaterialModel::PrescribedTemperatureOutputs<dim>> (n_points));
         }
@@ -1668,14 +1666,14 @@ namespace aspect
       // We need additional field outputs for the unscaled viscosity
       if (out.template get_additional_output<UnscaledViscosityAdditionalOutputs<dim>>() == nullptr)
         {
-          const unsigned int n_points = out.viscosities.size();
+          const unsigned int n_points = out.n_evaluation_points();
           out.additional_outputs.push_back(
             std::make_unique<UnscaledViscosityAdditionalOutputs<dim>> (n_points));
         }
 
       if (out.template get_additional_output<MaterialTypeAdditionalOutputs<dim>>() == nullptr)
         {
-          const unsigned int n_points = out.viscosities.size();
+          const unsigned int n_points = out.n_evaluation_points();
           out.additional_outputs.push_back(
             std::make_unique<MaterialTypeAdditionalOutputs<dim>> (n_points));
         }

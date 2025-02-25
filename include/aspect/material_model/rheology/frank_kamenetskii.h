@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2020 by the authors of the ASPECT code.
+  Copyright (C) 2020 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -29,8 +29,6 @@ namespace aspect
 {
   namespace MaterialModel
   {
-    using namespace dealii;
-
     namespace Rheology
     {
       /**
@@ -91,6 +89,9 @@ namespace aspect
            * List of Frank-Kamenetskii pressure prefactors (F).
            */
           std::vector<double> pressure_prefactors_frank_kamenetskii;
+
+          std::vector<double> reference_temperatures;
+          std::vector<double> reference_pressures;
       };
     }
   }

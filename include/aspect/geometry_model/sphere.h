@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2014 - 2019 by the authors of the ASPECT code.
+  Copyright (C) 2014 - 2023 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -27,8 +27,6 @@ namespace aspect
 {
   namespace GeometryModel
   {
-    using namespace dealii;
-
     template <int dim>
     class Sphere : public Interface<dim>, public SimulatorAccess<dim>
     {

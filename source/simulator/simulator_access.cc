@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2023 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -22,7 +22,7 @@
 #include <aspect/simulator.h>
 #include <aspect/mesh_deformation/free_surface.h>
 #include <aspect/mesh_deformation/interface.h>
-#include <aspect/particle/world.h>
+#include <aspect/particle/manager.h>
 
 namespace aspect
 {
@@ -248,7 +248,7 @@ namespace aspect
   bool
   SimulatorAccess<dim>::include_latent_heat () const
   {
-    const std::vector<std::string> &heating_models = simulator->heating_model_manager.get_active_heating_model_names();
+    const std::vector<std::string> &heating_models = simulator->heating_model_manager.get_active_plugin_names();
     return (std::find(heating_models.begin(), heating_models.end(), "latent heat") != heating_models.end());
   }
 
@@ -819,32 +819,29 @@ namespace aspect
 
   template <int dim>
   unsigned int
-  SimulatorAccess<dim>::n_particle_worlds() const
+  SimulatorAccess<dim>::n_particle_managers() const
   {
-    // operator () returns whether an object is managed by a unique ptr
-    return (simulator->particle_world ? 1 : 0);
+    return simulator->particle_managers.size();
   }
 
 
 
   template <int dim>
-  const Particle::World<dim> &
-  SimulatorAccess<dim>::get_particle_world() const
+  const Particle::Manager<dim> &
+  SimulatorAccess<dim>::get_particle_manager(unsigned int particle_manager_index) const
   {
-    Assert (simulator->particle_world.get() != nullptr,
-            ExcMessage("You can not call this function if there is no particle world."));
-    return *simulator->particle_world.get();
+    AssertThrow (particle_manager_index < simulator->particle_managers.size(), ExcInternalError());
+    return simulator->particle_managers[particle_manager_index];
   }
 
 
 
   template <int dim>
-  Particle::World<dim> &
-  SimulatorAccess<dim>::get_particle_world()
+  Particle::Manager<dim> &
+  SimulatorAccess<dim>::get_particle_manager(unsigned int particle_manager_index)
   {
-    Assert (simulator->particle_world.get() != nullptr,
-            ExcMessage("You can not call this function if there is no particle world."));
-    return *simulator->particle_world.get();
+    AssertThrow (particle_manager_index < simulator->particle_managers.size(), ExcInternalError());
+    return const_cast<Particle::Manager<dim>&>(simulator->particle_managers[particle_manager_index]);
   }
 
 

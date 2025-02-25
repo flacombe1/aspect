@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2016 - 2023 by the authors of the ASPECT code.
+  Copyright (C) 2016 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -30,8 +30,6 @@
 #include <deal.II/grid/filtered_iterator.h>
 #include <deal.II/fe/fe_dgq.h>
 #include <deal.II/fe/mapping_cartesian.h>
-
-using namespace dealii;
 
 namespace aspect
 {
@@ -427,7 +425,7 @@ namespace aspect
     if ( this->get_parameters().initial_adaptive_refinement > 0 ||
          this->get_parameters().adaptive_refinement_interval > 0 )
       {
-        AssertThrow(this->get_mesh_refinement_manager().template has_matching_mesh_refinement_strategy<MeshRefinement::VolumeOfFluidInterface<dim>>(),
+        AssertThrow(this->get_mesh_refinement_manager().template has_matching_active_plugin<MeshRefinement::VolumeOfFluidInterface<dim>>(),
                     ExcMessage("Volume of Fluid Interface Tracking requires that the 'volume of fluid interface' strategy be used for AMR"));
 
         AssertThrow(this->get_parameters().adaptive_refinement_interval <(1/this->get_parameters().CFL_number),

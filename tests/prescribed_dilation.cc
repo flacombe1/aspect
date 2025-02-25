@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2022 by the authors of the ASPECT code.
+  Copyright (C) 2022 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -34,8 +34,6 @@ namespace aspect
 {
   namespace Benchmark
   {
-    using namespace dealii;
-
     /**
      * u = cos(y), sin(x)+xy
      * p = 2/3 eta x
@@ -54,7 +52,7 @@ namespace aspect
         const double x = pos[0];
         const double y = pos[1];
 
-        return Point<2> (cos(y), sin(x)+x*y);
+        return Point<2> (std::cos(y), std::sin(x)+x*y);
       }
 
       double
@@ -204,8 +202,8 @@ namespace aspect
 
               if (force)
                 {
-                  force->rhs_u[i][0] = -eta*(1-cos(y));
-                  force->rhs_u[i][1] = -eta*(-sin(x));
+                  force->rhs_u[i][0] = -eta*(1-std::cos(y));
+                  force->rhs_u[i][1] = -eta*(-std::sin(x));
                   force->rhs_p[i] = 0.;
                 }
               if (prescribed_dilation)

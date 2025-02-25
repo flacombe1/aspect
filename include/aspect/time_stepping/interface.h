@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2019 - 2022 by the authors of the ASPECT code.
+  Copyright (C) 2019 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -28,8 +28,6 @@
 
 namespace aspect
 {
-  using namespace dealii;
-
   /**
    * A namespace containing all class related to the time stepping plugin system.
    */
@@ -127,7 +125,7 @@ namespace aspect
      * checking if the simulation is finished.
      */
     template <int dim>
-    class Manager : public SimulatorAccess<dim>
+    class Manager : public Plugins::ManagerBase<Interface<dim>>, public SimulatorAccess<dim>
     {
       public:
         /**
@@ -144,7 +142,8 @@ namespace aspect
          * (convection time step, conduction time step), settings from parameters,
          * and termination criteria (to hit the end time exactly).
          */
-        void update();
+        void
+        update() override;
 
         /**
          * Return the next step size as computed from update().
@@ -187,7 +186,7 @@ namespace aspect
          * then let these objects read their parameters as well.
          */
         void
-        parse_parameters (ParameterHandler &prm);
+        parse_parameters (ParameterHandler &prm) override;
 
         /**
          * Go through the list of all plugins that have been selected
@@ -285,15 +284,11 @@ namespace aspect
          * it to determine the time_step size in the final time step.
          */
         TerminationCriteria::Manager<dim> termination_manager;
-
-        /**
-         * A list of active plugins to determine time step sizes.
-         */
-        std::list<std::unique_ptr<Interface<dim>>> active_plugins;
     };
 
 
 
+<<<<<<< HEAD
     template <int dim>
     template <typename PluginType, typename>
     inline
@@ -332,6 +327,8 @@ namespace aspect
 
 
 
+=======
+>>>>>>> 76bb6643a816b5eec55a498136343a2caa4c8579
     /**
      * Given a class name, a name, and a description for the parameter file, register it with the
      * aspect::TimeStepping::Manager class.

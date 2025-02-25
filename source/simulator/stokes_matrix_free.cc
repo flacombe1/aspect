@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2018 - 2023 by the authors of the ASPECT code.
+  Copyright (C) 2018 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -20,7 +20,6 @@
 
 
 #include <aspect/stokes_matrix_free.h>
-#include <aspect/citation_info.h>
 #include <aspect/mesh_deformation/interface.h>
 #include <aspect/mesh_deformation/free_surface.h>
 #include <aspect/melt.h>
@@ -72,7 +71,7 @@ namespace aspect
       {
         dealii::LinearAlgebra::ReadWriteVector<double> rwv;
         rwv.reinit(in);
-        out.import(rwv, VectorOperation::insert);
+        out.import_elements(rwv, VectorOperation::insert);
       }
 
       void copy(TrilinosWrappers::MPI::BlockVector &out,
@@ -543,7 +542,11 @@ namespace aspect
         for (const unsigned int q : velocity.quadrature_point_indices())
           {
             const Tensor<1, dim, VectorizedArray<number>> phi_u_i = velocity.get_value(q);
+#if DEAL_II_VERSION_GTE(9,7,0)
+            const auto &normal_vector = velocity.normal_vector(q);
+#else
             const auto &normal_vector = velocity.get_normal_vector(q);
+#endif
             const auto stabilization_tensor = cell_data->free_surface_stabilization_term_table(face - n_faces_interior, q);
             const auto value_submit = -(stabilization_tensor * phi_u_i) * normal_vector;
 
@@ -619,42 +622,53 @@ namespace aspect
   {
     FEEvaluation<dim,degree_p,degree_p+2,1,number> pressure (data, /*dofh*/1);
 
+    for (unsigned int cell=cell_range.first; cell<cell_range.second; ++cell)
+      {
+        pressure.reinit (cell);
+        pressure.gather_evaluate (src, EvaluationFlags::values);
+        this->inner_cell_operation(pressure);
+        pressure.integrate_scatter (EvaluationFlags::values, dst);
+      }
+
+  }
+
+
+  template <int dim, int degree_p, typename number>
+  void
+  MatrixFreeStokesOperators::MassMatrixOperator<dim,degree_p,number>
+  ::inner_cell_operation(FEEvaluation<dim,
+                         degree_p,
+                         degree_p+2,
+                         1,
+                         number> &pressure) const
+  {
     const bool use_viscosity_at_quadrature_points
       = (cell_data->viscosity.size(1) == pressure.n_q_points);
 
-    for (unsigned int cell=cell_range.first; cell<cell_range.second; ++cell)
+    const unsigned int cell = pressure.get_current_cell_index();
+    const unsigned int n_components_filled = this->get_matrix_free()->n_active_entries_per_cell_batch(cell);
+
+    VectorizedArray<number> prefactor;
+
+    // The /= operator for VectorizedArray results in a floating point operation
+    // (divide by 0) since the (*viscosity)(cell) array is not completely filled.
+    // Therefore, we need to divide each entry manually.
+    if (!use_viscosity_at_quadrature_points)
       {
-        VectorizedArray<number> one_over_viscosity = cell_data->viscosity(cell, 0);
-
-        const unsigned int n_components_filled = this->get_matrix_free()->n_active_entries_per_cell_batch(cell);
-
-        // The /= operator for VectorizedArray results in a floating point operation
-        // (divide by 0) since the (*viscosity)(cell) array is not completely filled.
-        // Therefore, we need to divide each entry manually.
         for (unsigned int c=0; c<n_components_filled; ++c)
-          one_over_viscosity[c] = cell_data->pressure_scaling*cell_data->pressure_scaling/one_over_viscosity[c];
+          prefactor[c] = cell_data->pressure_scaling*cell_data->pressure_scaling / cell_data->viscosity(cell, 0)[c];
+      }
 
-        pressure.reinit (cell);
-        pressure.gather_evaluate (src, EvaluationFlags::values);
-
-        for (const unsigned int q : pressure.quadrature_point_indices())
+    for (const unsigned int q : pressure.quadrature_point_indices())
+      {
+        // Only update the viscosity if a Q1 projection is used.
+        if (use_viscosity_at_quadrature_points)
           {
-            // Only update the viscosity if a Q1 projection is used.
-            if (use_viscosity_at_quadrature_points)
-              {
-                one_over_viscosity = cell_data->viscosity(cell, q);
-
-                const unsigned int n_components_filled = this->get_matrix_free()->n_active_entries_per_cell_batch(cell);
-
-                for (unsigned int c=0; c<n_components_filled; ++c)
-                  one_over_viscosity[c] = cell_data->pressure_scaling*cell_data->pressure_scaling/one_over_viscosity[c];
-              }
-
-            pressure.submit_value(one_over_viscosity*
-                                  pressure.get_value(q),q);
+            for (unsigned int c=0; c<n_components_filled; ++c)
+              prefactor[c] = cell_data->pressure_scaling*cell_data->pressure_scaling / cell_data->viscosity(cell, q)[c];
           }
 
-        pressure.integrate_scatter (EvaluationFlags::values, dst);
+        pressure.submit_value(prefactor*pressure.get_value(q), q);
       }
   }
 
@@ -687,12 +701,23 @@ namespace aspect
     dealii::LinearAlgebra::distributed::Vector<number> &diagonal =
       this->diagonal_entries->get_vector();
 
-    unsigned int dummy = 0;
     this->data->initialize_dof_vector(inverse_diagonal, /*dofh*/1);
     this->data->initialize_dof_vector(diagonal, /*dofh*/1);
 
-    this->data->cell_loop (&MassMatrixOperator::local_compute_diagonal, this,
-                           diagonal, dummy);
+    MatrixFreeTools::compute_diagonal<dim,degree_p,degree_p+2,1,number,VectorizedArray<number>,dealii::LinearAlgebra::distributed::Vector<number>>(
+      *(this->get_matrix_free()),
+      diagonal,
+      [&](FEEvaluation<dim,
+          degree_p,
+          degree_p+2,
+          1,
+          number> &pressure)
+    {
+      pressure.evaluate(EvaluationFlags::values);
+      this->inner_cell_operation(pressure);
+      pressure.integrate(EvaluationFlags::values);
+    },
+    1 /* dofhandler */);
 
     this->set_constrained_entries_to_one(diagonal);
     inverse_diagonal = diagonal;
@@ -707,72 +732,6 @@ namespace aspect
                ExcMessage("No diagonal entry in a positive definite operator "
                           "should be zero or negative."));
         local_element = 1./local_element;
-      }
-  }
-
-
-
-  template <int dim, int degree_p, typename number>
-  void
-  MatrixFreeStokesOperators::MassMatrixOperator<dim,degree_p,number>
-  ::local_compute_diagonal (const MatrixFree<dim,number>                     &data,
-                            dealii::LinearAlgebra::distributed::Vector<number>  &dst,
-                            const unsigned int &,
-                            const std::pair<unsigned int,unsigned int>       &cell_range) const
-  {
-    FEEvaluation<dim,degree_p,degree_p+2,1,number> pressure (data, 1);
-
-    AlignedVector<VectorizedArray<number>> diagonal(pressure.dofs_per_cell);
-
-    const bool use_viscosity_at_quadrature_points
-      = (cell_data->viscosity.size(1) == pressure.n_q_points);
-
-    for (unsigned int cell=cell_range.first; cell<cell_range.second; ++cell)
-      {
-        VectorizedArray<number> one_over_viscosity = cell_data->viscosity(cell, 0);
-
-        const unsigned int n_components_filled = this->get_matrix_free()->n_active_entries_per_cell_batch(cell);
-
-        // The /= operator for VectorizedArray results in a floating point operation
-        // (divide by 0) since the (*viscosity)(cell) array is not completely filled.
-        // Therefore, we need to divide each entry manually.
-        for (unsigned int c=0; c<n_components_filled; ++c)
-          one_over_viscosity[c] = cell_data->pressure_scaling*cell_data->pressure_scaling/one_over_viscosity[c];
-
-        pressure.reinit (cell);
-        for (unsigned int i=0; i<pressure.dofs_per_cell; ++i)
-          {
-            for (unsigned int j=0; j<pressure.dofs_per_cell; ++j)
-              pressure.begin_dof_values()[j] = VectorizedArray<number>();
-            pressure.begin_dof_values()[i] = make_vectorized_array<number> (1.);
-
-            pressure.evaluate (EvaluationFlags::values);
-
-            for (const unsigned int q : pressure.quadrature_point_indices())
-              {
-                // Only update the viscosity if a Q1 projection is used.
-                if (use_viscosity_at_quadrature_points)
-                  {
-                    one_over_viscosity = cell_data->viscosity(cell, q);
-
-                    const unsigned int n_components_filled = this->get_matrix_free()->n_active_entries_per_cell_batch(cell);
-
-                    for (unsigned int c=0; c<n_components_filled; ++c)
-                      one_over_viscosity[c] = cell_data->pressure_scaling*cell_data->pressure_scaling/one_over_viscosity[c];
-                  }
-
-                pressure.submit_value(one_over_viscosity*
-                                      pressure.get_value(q),q);
-              }
-
-            pressure.integrate (EvaluationFlags::values);
-
-            diagonal[i] = pressure.begin_dof_values()[i];
-          }
-
-        for (unsigned int i=0; i<pressure.dofs_per_cell; ++i)
-          pressure.begin_dof_values()[i] = diagonal[i];
-        pressure.distribute_local_to_global (dst);
       }
   }
 
@@ -1420,8 +1379,15 @@ namespace aspect
 
                   for (unsigned int q=0; q<n_q_points; ++q)
                     {
-                      const SymmetricTensor<2,dim> effective_strain_rate =
-                        elastic_out == nullptr ? deviator(in.strain_rate[q]) : elastic_out->viscoelastic_strain_rate[q];
+                      // use the correct strain rate for the Jacobian
+                      // when elasticity is enabled use viscoelastic strain rate
+                      // when stabilization is enabled, use the deviatoric strain rate because the SPD factor
+                      // that is computed is only safe for the deviatoric strain rate (see PR #5580 and issue #5555)
+                      SymmetricTensor<2,dim> effective_strain_rate = in.strain_rate[q];
+                      if (elastic_out != nullptr)
+                        effective_strain_rate = elastic_out->viscoelastic_strain_rate[q];
+                      else if ((sim.newton_handler->parameters.velocity_block_stabilization & Newton::Parameters::Stabilization::PD) != Newton::Parameters::Stabilization::none)
+                        effective_strain_rate = deviator(effective_strain_rate);
 
                       // use the spd factor when the stabilization is PD or SPD.
                       const double alpha =  (sim.newton_handler->parameters.velocity_block_stabilization
@@ -1694,7 +1660,11 @@ namespace aspect
             for (const unsigned int q : velocity_boundary.quadrature_point_indices())
               {
                 const Tensor<1, dim, VectorizedArray<double>> phi_u_i = velocity_boundary.get_value(q);
+#if DEAL_II_VERSION_GTE(9, 7, 0)
+                const auto &normal_vector = velocity_boundary.normal_vector(q);
+#else
                 const auto &normal_vector = velocity_boundary.get_normal_vector(q);
+#endif
                 const auto stabilization_tensor = active_cell_data.free_surface_stabilization_term_table(face - n_faces_interior, q);
                 const auto value_submit = (stabilization_tensor * phi_u_i) * normal_vector;
                 velocity_boundary.submit_value(value_submit, q);
@@ -1718,7 +1688,7 @@ namespace aspect
 
 
   template <int dim, int velocity_degree>
-  std::pair<double,double> StokesMatrixFreeHandlerImplementation<dim,velocity_degree>::solve()
+  std::pair<double,double> StokesMatrixFreeHandlerImplementation<dim,velocity_degree>::solve(LinearAlgebra::BlockVector &solution_vector)
   {
     double initial_nonlinear_residual = numbers::signaling_nan<double>();
     double final_linear_residual      = numbers::signaling_nan<double>();
@@ -1911,8 +1881,7 @@ namespace aspect
         linearized_stokes_initial_guess.block (block_p) = sim.current_linearization_point.block (block_p);
 
         sim.denormalize_pressure (sim.last_pressure_normalization_adjustment,
-                                  linearized_stokes_initial_guess,
-                                  sim.current_linearization_point);
+                                  linearized_stokes_initial_guess);
       }
     else
       {
@@ -2334,8 +2303,8 @@ namespace aspect
 
     // then copy back the solution from the temporary (non-ghosted) vector
     // into the ghosted one with all solution components
-    sim.solution.block(block_vel) = distributed_stokes_solution.block(block_vel);
-    sim.solution.block(block_p) = distributed_stokes_solution.block(block_p);
+    solution_vector.block(block_vel) = distributed_stokes_solution.block(block_vel);
+    solution_vector.block(block_p) = distributed_stokes_solution.block(block_p);
 
     if (print_details)
       {
@@ -2350,16 +2319,16 @@ namespace aspect
       }
 
     // do some cleanup now that we have the solution
-    sim.remove_nullspace(sim.solution, distributed_stokes_solution);
+    sim.remove_nullspace(solution_vector, distributed_stokes_solution);
     if (sim.assemble_newton_stokes_system == false)
-      sim.last_pressure_normalization_adjustment = sim.normalize_pressure(sim.solution);
+      sim.last_pressure_normalization_adjustment = sim.normalize_pressure(solution_vector);
 
 
     // convert melt pressures
     // TODO: We assert in the StokesMatrixFreeHandler constructor that we
     //       are not including melt transport.
     if (sim.parameters.include_melt_transport)
-      sim.melt_handler->compute_melt_variables(sim.system_matrix,sim.solution,sim.system_rhs);
+      sim.melt_handler->compute_melt_variables(sim.system_matrix,solution_vector,sim.system_rhs);
 
 
     return std::pair<double,double>(initial_nonlinear_residual,
@@ -2404,9 +2373,13 @@ namespace aspect
 
       DoFRenumbering::hierarchical(dof_handler_v);
 
+#if DEAL_II_VERSION_GTE(9,7,0)
+      const IndexSet locally_relevant_dofs = DoFTools::extract_locally_relevant_dofs(dof_handler_v);
+#else
       IndexSet locally_relevant_dofs;
-      DoFTools::extract_locally_relevant_dofs (dof_handler_v,
-                                               locally_relevant_dofs);
+      DoFTools::extract_locally_relevant_dofs(dof_handler_v, locally_relevant_dofs);
+#endif
+
 #if DEAL_II_VERSION_GTE(9,6,0)
       constraints_v.reinit(dof_handler_v.locally_owned_dofs(), locally_relevant_dofs);
 #else
@@ -2446,9 +2419,14 @@ namespace aspect
 
       DoFRenumbering::hierarchical(dof_handler_p);
 
+#if DEAL_II_VERSION_GTE(9,7,0)
+      const IndexSet locally_relevant_dofs = DoFTools::extract_locally_relevant_dofs(dof_handler_p);
+#else
       IndexSet locally_relevant_dofs;
-      DoFTools::extract_locally_relevant_dofs (dof_handler_p,
-                                               locally_relevant_dofs);
+      DoFTools::extract_locally_relevant_dofs(dof_handler_p,
+                                              locally_relevant_dofs);
+#endif
+
       constraints_p.reinit(
 #if DEAL_II_VERSION_GTE(9,6,0)
         dof_handler_p.locally_owned_dofs(),
@@ -2487,40 +2465,23 @@ namespace aspect
       mg_constrained_dofs_A_block.initialize(dof_handler_v);
 
       std::set<types::boundary_id> dirichlet_boundary = sim.boundary_velocity_manager.get_zero_boundary_velocity_indicators();
-      for (const auto &it: sim.boundary_velocity_manager.get_active_boundary_velocity_names())
+      for (const auto boundary_id: sim.boundary_velocity_manager.get_prescribed_boundary_velocity_indicators())
         {
-          const types::boundary_id bdryid = it.first;
-          const std::string component=it.second.first;
+          const ComponentMask component_mask = sim.boundary_velocity_manager.get_component_mask(boundary_id);
 
-          if (component.length()>0)
+          if (component_mask != ComponentMask(sim.introspection.n_components, false))
             {
-              std::vector<bool> mask(fe_v.n_components(), false);
-              for (const auto &direction : component)
-                {
-                  switch (direction)
-                    {
-                      case 'x':
-                        mask[0] = true;
-                        break;
-                      case 'y':
-                        mask[1] = true;
-                        break;
-                      case 'z':
-                        // we must be in 3d, or 'z' should never have gotten through
-                        Assert (dim==3, ExcInternalError());
-                        if (dim==3)
-                          mask[2] = true;
-                        break;
-                      default:
-                        Assert (false, ExcInternalError());
-                    }
-                }
-              mg_constrained_dofs_A_block.make_zero_boundary_constraints(dof_handler_v, {bdryid}, ComponentMask(mask));
+              ComponentMask velocity_mask(fe_v.n_components(), false);
+
+              for (unsigned int i=0; i<dim; ++i)
+                velocity_mask.set(i, component_mask[sim.introspection.component_indices.velocities[i]]);
+
+              mg_constrained_dofs_A_block.make_zero_boundary_constraints(dof_handler_v, {boundary_id}, velocity_mask);
             }
           else
             {
               // no mask given: add at the end
-              dirichlet_boundary.insert(bdryid);
+              dirichlet_boundary.insert(boundary_id);
             }
         }
 
@@ -2599,8 +2560,13 @@ namespace aspect
             (sim.mesh_deformation) ? sim.mesh_deformation->get_level_mapping(level) : *sim.mapping;
 
           {
+#if DEAL_II_VERSION_GTE(9,7,0)
+            const IndexSet relevant_dofs = DoFTools::extract_locally_relevant_level_dofs(dof_handler_v, level);
+#else
             IndexSet relevant_dofs;
             DoFTools::extract_locally_relevant_level_dofs(dof_handler_v, level, relevant_dofs);
+#endif
+
 #if DEAL_II_VERSION_GTE(9,6,0)
             level_constraints_v.reinit(dof_handler_v.locally_owned_mg_dofs(level), relevant_dofs);
             for (const auto index : mg_constrained_dofs_A_block.get_boundary_indices(level))
@@ -2641,8 +2607,12 @@ namespace aspect
               }
           }
           {
+#if DEAL_II_VERSION_GTE(9,7,0)
+            const IndexSet relevant_dofs = DoFTools::extract_locally_relevant_level_dofs(dof_handler_p, level);
+#else
             IndexSet relevant_dofs;
             DoFTools::extract_locally_relevant_level_dofs(dof_handler_p, level, relevant_dofs);
+#endif
 
 #if DEAL_II_VERSION_GTE(9,6,0)
             level_constraints_p.reinit(dof_handler_p.locally_owned_mg_dofs(level), relevant_dofs);

@@ -1,4 +1,4 @@
-# Copyright (C) 2013 - 2023 by the authors of the ASPECT code.
+# Copyright (C) 2013 - 2024 by the authors of the ASPECT code.
 #
 # This file is part of ASPECT.
 #
@@ -65,6 +65,9 @@ if ("${CMAKE_BUILD_TYPE}" STREQUAL "")
   )
 endif()
 
+# Then convert the awkward tri-state CMAKE_BUILD_TYPE into two bi-state
+# variables ASPECT_BUILD_DEBUG and ASPECT_BUILD_RELEASE that are either
+# ON or OFF.
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Release" OR
    "${CMAKE_BUILD_TYPE}" STREQUAL "Debug" OR
    "${CMAKE_BUILD_TYPE}" STREQUAL "DebugRelease" )
@@ -88,6 +91,8 @@ else()
   set(ASPECT_BUILD_RELEASE "OFF")
 endif()
 
+# Some other ASPECT configuration options:
+set(ASPECT_MAX_NUM_PARTICLE_SYSTEMS 2 CACHE STRING "The maximum number of particle systems supported at runtime.")
 
 
 
@@ -287,7 +292,8 @@ if(ASPECT_WITH_WORLD_BUILDER)
 
       set(WB_TARGET "WorldBuilderDebug")
       add_subdirectory("${WORLD_BUILDER_SOURCE_DIR}" ${CMAKE_BINARY_DIR}/world_builder/)
-      target_compile_options(WorldBuilderDebug PRIVATE "-g" "${ASPECT_ADDITIONAL_CXX_FLAGS}")
+      separate_arguments(SEPARATED_FLAGS NATIVE_COMMAND ${ASPECT_ADDITIONAL_CXX_FLAGS})
+      target_compile_options(WorldBuilderDebug PRIVATE "-g" "${SEPARATED_FLAGS}")
 
       set(CMAKE_BUILD_TYPE ${_build_type})
     endif()
@@ -303,7 +309,9 @@ if(ASPECT_WITH_WORLD_BUILDER)
       set(WB_TARGET "WorldBuilderRelease")
       add_subdirectory("${WORLD_BUILDER_SOURCE_DIR}" ${CMAKE_BINARY_DIR}/world_builder_release/)
       target_compile_definitions(WorldBuilderRelease PUBLIC "NDEBUG")
-      target_compile_options(WorldBuilderRelease PRIVATE "-O3" "${ASPECT_ADDITIONAL_CXX_FLAGS}")
+
+      separate_arguments(SEPARATED_FLAGS NATIVE_COMMAND ${ASPECT_ADDITIONAL_CXX_FLAGS})
+      target_compile_options(WorldBuilderRelease PRIVATE "-O3" "${SEPARATED_FLAGS}")
 
       set(CMAKE_BUILD_TYPE ${_build_type})
     endif()
@@ -350,8 +358,33 @@ if(ASPECT_WITH_WORLD_BUILDER)
 endif()
 message(STATUS "")
 
-# Other stuff about external tools:
-set(FORCE_COLORED_OUTPUT ON CACHE BOOL "Forces colored output when compiling with gcc and clang.")
+
+#
+# Other stuff about external tools and how we interact with the system:
+#
+
+# Depending on whether we link statically or allow for shared libs,
+# we can or can not load plugins via external shared libs. Pass this
+# down during compilation so we can disable it in the code.
+set(ASPECT_USE_SHARED_LIBS ON CACHE BOOL "If ON, we support loading shared plugin files.")
+if(DEAL_II_STATIC_EXECUTABLE STREQUAL "ON")
+  message(STATUS "Creating a statically linked executable")
+  set(ASPECT_USE_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+endif()
+
+
+# Generate compile_commands.json for tooling (VS Code, etc.)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(FORCE_COLORED_OUTPUT ON
+    CACHE BOOL "Forces colored output when compiling with gcc and clang.")
+
+# Query the current git commit so we can put it into the start-up
+# message of ASPECT.
+include(${CMAKE_SOURCE_DIR}/cmake/macro_aspect_query_git_information.cmake)
+ASPECT_QUERY_GIT_INFORMATION("ASPECT")
+configure_file(${CMAKE_SOURCE_DIR}/include/aspect/revision.h.in
+               ${CMAKE_BINARY_DIR}/include/aspect/revision.h @ONLY)
+
 
 # Check if we can raise floating point exceptions.
 #
@@ -379,6 +412,26 @@ if(ASPECT_USE_FP_EXCEPTIONS)
   endif()
 endif()
 
+# Check if we want to precompile header files. This speeds up compile time,
+# but can fail on some machines with old CMake. Starting with CMake 3.16
+# there is native support inside CMake and we can precompile headers.
+#
+# While there, also set up the variable to use "unity" builds.
+if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.16)
+  set(ASPECT_PRECOMPILE_HEADERS ON CACHE BOOL "Precompile external header files to speedup compile time. Currently only supported for CMake 3.16 and newer versions.")
+  set(ASPECT_UNITY_BUILD ON CACHE BOOL "Combine source files into less compile targets to speedup compile time. Currently only supported for CMake 3.16 and newer versions.")
+else()
+  set(ASPECT_PRECOMPILE_HEADERS OFF CACHE BOOL "Precompile external header files to speedup compile time. Currently only supported for CMake 3.16 and newer versions." FORCE)
+  set(ASPECT_UNITY_BUILD OFF CACHE BOOL "Combine source files into less compile targets to speedup compile time. Currently only supported for CMake 3.16 and newer versions." FORCE)
+endif()
+
+if(ASPECT_PRECOMPILE_HEADERS AND CMAKE_CXX_COMPILER_ID MATCHES "Intel")
+  # Intel 19.1 produces internal compiler errors inside bundled boost with
+  # precompiled headers, so we deactivate it:
+  set(ASPECT_PRECOMPILE_HEADERS OFF CACHE BOOL "" FORCE)
+endif()
+
+
 
 
 # ##############################################################################
@@ -388,6 +441,20 @@ endif()
 message(STATUS "")
 message(STATUS "===== Configuring ASPECT build targets =============")
 
+
+# ##############################################################################
+# Generate config.h
+
+# First, define macro with the source directory that will be exported in
+# config.h. This can be used to hard-code the location of data files, such as
+# in $ASPECT_SOURCE_DIR/data/velocity-boundary-conditions/gplates/*
+set(ASPECT_SOURCE_DIR ${CMAKE_SOURCE_DIR})
+
+# And finally generate the file
+configure_file(
+  ${CMAKE_SOURCE_DIR}/include/aspect/config.h.in
+  ${CMAKE_BINARY_DIR}/include/aspect/config.h
+  )
 
 
 # ##############################################################################
@@ -420,20 +487,25 @@ endforeach()
 include_directories(BEFORE ${CMAKE_BINARY_DIR}/include include)
 include_directories(AFTER  contrib/catch)
 
-# Generate compile_commands.json for tooling (VS Code, etc.)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+# Set the name of the main targets in the form of
+# TARGET_EXE/LIB_DEBUG/RELEASE. Set TARGET_EXE as the debug build,
+# unless we have only release mode enabled.
+if(${ASPECT_BUILD_DEBUG} STREQUAL "ON")
+  set(TARGET_EXE_DEBUG "aspect.exe.debug")
+  list(APPEND TARGET_EXECUTABLES "${TARGET_EXE_DEBUG}")
 
+  set(TARGET_EXE "${TARGET_EXE_DEBUG}")
+endif()
 
+if(${ASPECT_BUILD_RELEASE} STREQUAL "ON")
+  set(TARGET_EXE_RELEASE "aspect.exe.release")
+  list(APPEND TARGET_EXECUTABLES "${TARGET_EXE_RELEASE}")
 
-# Set the name of the project and main target. If we are generating
-# ASPECT debug and release mode, we have the debug build as 'aspect'
-# and we populate a list of all targets (by default they are the same):
-set(TARGET "aspect")
-set(TARGETS "aspect")
+  if ("${TARGET_EXE}" STREQUAL "")
+    set(TARGET_EXE "${TARGET_EXE_RELEASE}")
+  endif()
+endif()
 
-include(${CMAKE_SOURCE_DIR}/cmake/macro_aspect_query_git_information.cmake)
-ASPECT_QUERY_GIT_INFORMATION("ASPECT")
-configure_file(${CMAKE_SOURCE_DIR}/include/aspect/revision.h.in ${CMAKE_BINARY_DIR}/include/aspect/revision.h @ONLY)
 
 message(STATUS "Writing externally readable configuration information")
 include(CMakePackageConfigHelpers)
@@ -515,11 +587,11 @@ if(EXISTS ${CMAKE_SOURCE_DIR}/unit_tests/CMakeLists.txt)
     message(FATAL_ERROR "ERROR: unittest/ project could not be configured.")
   endif()
 
-  # Finally create a custom target to run them:
+  # Finally create a custom target to run the tests:
   add_custom_target(run_unit_tests
     COMMAND ${CMAKE_BINARY_DIR}/aspect --test
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/unit_tests
-    DEPENDS ${TARGET}
+    DEPENDS ${TARGET_EXE}
     COMMENT "Running unit_tests ...")
 endif()
 
@@ -533,8 +605,6 @@ if(EXISTS ${CMAKE_SOURCE_DIR}/tests/CMakeLists.txt
 
   file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/tests)
 
-  set(aspect_binary ${CMAKE_BINARY_DIR}/${TARGET})
-
   # set a flag so we don't need to rerun this configuration step every time:
   set(ASPECT_NEED_TEST_CONFIGURE OFF CACHE BOOL "" FORCE)
 
@@ -545,7 +615,7 @@ if(EXISTS ${CMAKE_SOURCE_DIR}/tests/CMakeLists.txt
         -D ASPECT_COMPARE_TEST_RESULTS=${ASPECT_COMPARE_TEST_RESULTS}
         -D Aspect_DIR=${CMAKE_BINARY_DIR}
         -D CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-        -D ASPECT_BINARY=${aspect_binary}
+        -D ASPECT_BINARY=${CMAKE_BINARY_DIR}/aspect
         ${CMAKE_CURRENT_SOURCE_DIR}/tests
     OUTPUT_FILE setup_tests.log
     RESULT_VARIABLE test_cmake_result
@@ -559,7 +629,7 @@ if(EXISTS ${CMAKE_SOURCE_DIR}/tests/CMakeLists.txt
   add_custom_target(run_tests
     COMMAND ${CMAKE_COMMAND} --build . --target test
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/tests
-    DEPENDS ${TARGET}
+    DEPENDS ${TARGET_EXE}
     COMMENT "Running tests ...")
 endif()
 
@@ -629,13 +699,13 @@ file(WRITE ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/print_usage.cmake
 "message(
 \"###
 #
-#  Project ${TARGET} set up with  ${DEAL_II_PACKAGE_NAME}-${DEAL_II_PACKAGE_VERSION}  found at
+#  Project ${TARGET_EXE} set up with  ${DEAL_II_PACKAGE_NAME}-${DEAL_II_PACKAGE_VERSION}  found at
 #      ${DEAL_II_PATH}
 #
 #  CMAKE_BUILD_TYPE:          ${CMAKE_BUILD_TYPE}
 #
 #  You can now run
-#      ${_make_command}                - to compile and link ${TARGET}
+#      ${_make_command}                - to compile and link ${TARGET_EXE}
 #      ${_make_command} debug          - to switch the build type to 'Debug'
 #      ${_make_command} release        - to switch the build type to 'Release'
 #      ${_make_command} debugrelease   - to switch the build type to compile both
@@ -654,15 +724,6 @@ add_custom_target(info
   COMMAND ${CMAKE_COMMAND} -P ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/print_usage.cmake
   )
 
-
-# Depending on whether we link statically or allow for shared libs,
-# we can or can not load plugins via external shared libs. Pass this
-# down during compilation so we can disable it in the code
-set(ASPECT_USE_SHARED_LIBS ON CACHE BOOL "If ON, we support loading shared plugin files.")
-if(DEAL_II_STATIC_EXECUTABLE STREQUAL "ON")
-  message(STATUS "Creating a statically linked executable")
-  set(ASPECT_USE_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-endif()
 
 INCLUDE (CheckCXXSourceCompiles)
 
@@ -713,12 +774,17 @@ if (${FORCE_COLORED_OUTPUT})
   endif()
 endif()
 
+# deal.II versions >=9.5 disable deprecation warnings in user code. Enable
+# the warnings again by removing the flag that disables them.
+string(REPLACE "-Wno-deprecated-declarations" "" DEAL_II_WARNING_FLAGS "${DEAL_II_WARNING_FLAGS}")
+
 set(ASPECT_ADDITIONAL_CXX_FLAGS "" CACHE STRING "Additional CMAKE_CXX_FLAGS applied after the deal.II options.")
 
 if(NOT ASPECT_ADDITIONAL_CXX_FLAGS STREQUAL "")
   message(STATUS "Appending ASPECT_ADDITIONAL_CXX_FLAGS: '${ASPECT_ADDITIONAL_CXX_FLAGS}':")
   string(APPEND DEAL_II_CXX_FLAGS_DEBUG " ${ASPECT_ADDITIONAL_CXX_FLAGS}")
   string(APPEND DEAL_II_CXX_FLAGS_RELEASE " ${ASPECT_ADDITIONAL_CXX_FLAGS}")
+  message(STATUS "  DEAL_II_WARNING_FLAGS: ${DEAL_II_WARNING_FLAGS}")
   message(STATUS "  DEAL_II_CXX_FLAGS_DEBUG: ${DEAL_II_CXX_FLAGS_DEBUG}")
   message(STATUS "  DEAL_II_CXX_FLAGS_RELEASE: ${DEAL_II_CXX_FLAGS_RELEASE}")
 endif()
@@ -732,29 +798,48 @@ set(TARGET_SRC
 
 
 
-# Setup targets for ASPECT:
+# Set up targets for ASPECT executables:
 if(${ASPECT_BUILD_DEBUG} STREQUAL "ON")
-  add_executable(${TARGET} ${TARGET_SRC})
-  deal_ii_setup_target(${TARGET} DEBUG)
+  add_executable(${TARGET_EXE_DEBUG} ${TARGET_SRC})
+  set_property(TARGET ${TARGET_EXE_DEBUG}
+               PROPERTY OUTPUT_NAME aspect-debug)
+  deal_ii_setup_target(${TARGET_EXE_DEBUG} DEBUG)
 endif()
 
 if(${ASPECT_BUILD_RELEASE} STREQUAL "ON")
-  add_executable(${TARGET}-release ${TARGET_SRC})
-  deal_ii_setup_target(${TARGET}-release RELEASE)
-  set(TARGETS ${TARGET}-release ${TARGET})
-  # default for testing:
-  set(TARGET ${TARGET})
+  add_executable(${TARGET_EXE_RELEASE} ${TARGET_SRC})
+  set_property(TARGET ${TARGET_EXE_RELEASE}
+               PROPERTY OUTPUT_NAME aspect-release)
+  deal_ii_setup_target(${TARGET_EXE_RELEASE} RELEASE)
 endif()
+
+# Make sure that we have an executable 'aspect' that
+# links to the debug version, or the release version if
+# we did not compile in debug mode. TARGET_EXE describes
+# which target this references.
+#
+# We do this in the build directory with the first of the following
+# two commands, and in the install directory with the second.
+add_custom_target(aspect ALL
+                  COMMAND ${CMAKE_COMMAND} -E create_symlink
+                           $<TARGET_PROPERTY:${TARGET_EXE},OUTPUT_NAME>  # executable file name
+                           ${CMAKE_BINARY_DIR}/aspect                    # link name
+                  DEPENDS ${TARGET_EXE}
+                  COMMENT "Creating symlink from ${TARGET_EXE} to './aspect'")
+install(PROGRAMS ${CMAKE_BINARY_DIR}/aspect
+	TYPE BIN)
 
 # This should be done in DEAL_II_SETUP_TARGET, but deal.II 9.5
 # does not do so, so do it here. Remove this when we require deal.II 9.6.
-if(DEAL_II_PACKAGE_VERSION VERSION_LESS 9.6.0)
-  if(CMAKE_BUILD_TYPE MATCHES Release)
-    add_definitions("-DNDEBUG")
+if(${ASPECT_BUILD_RELEASE} STREQUAL "ON")
+  if(DEAL_II_PACKAGE_VERSION VERSION_LESS 9.6.0)
+    target_compile_definitions(${TARGET_EXE_RELEASE} PUBLIC "NDEBUG")
   endif()
-  if(CMAKE_BUILD_TYPE MATCHES DebugRelease)
-    target_compile_definitions(${TARGET}-release PUBLIC "NDEBUG")
-  endif()
+endif()
+
+# turn on debug checks like invalid element access in c++ standard library:
+if(${ASPECT_BUILD_DEBUG} STREQUAL "ON")
+  target_compile_definitions(${TARGET_EXE_DEBUG} PUBLIC "_GLIBCXX_ASSERTIONS")
 endif()
 
 
@@ -766,7 +851,7 @@ endif()
 if(${ZLIB_FOUND})
   message(STATUS "Linking ASPECT against zlib")
   include_directories(${ZLIB_INCLUDE_DIR})
-  foreach(_T ${TARGETS})
+  foreach(_T ${TARGET_EXECUTABLES})
     target_link_libraries(${_T} ${ZLIB_LIBRARY})
   endforeach()
 endif()
@@ -775,7 +860,7 @@ endif()
 if(${PerpleX_FOUND})
   message(STATUS "Linking ASPECT against PerpleX")
   include_directories(${PerpleX_INCLUDE_DIR})
-  foreach(_T ${TARGETS})
+  foreach(_T ${TARGET_EXECUTABLES})
     target_link_libraries(${_T} ${PerpleX_LIBRARIES})
   endforeach()
 endif()
@@ -784,7 +869,7 @@ endif()
 if(${LIBDAP_FOUND})
   message(STATUS "Linking ASPECT against libdap")
   include_directories(${LIBDAP_INCLUDE_DIRS})
-  foreach(_T ${TARGETS})
+  foreach(_T ${TARGET_EXECUTABLES})
     target_link_libraries(${_T} ${LIBDAP_LIBRARIES})
   endforeach()
 endif()
@@ -792,7 +877,7 @@ endif()
 # Fastscape
 if (FASTSCAPE)
   message(STATUS "Linking ASPECT against Fastscape")
-  foreach(_T ${TARGETS})
+  foreach(_T ${TARGET_EXECUTABLES})
     target_link_libraries(${_T} ${FASTSCAPE})
   endforeach()
 endif()
@@ -801,7 +886,7 @@ endif()
 if(${NETCDF_FOUND})
   message(STATUS "Linking ASPECT against NetCDF")
   include_directories(${NETCDF_INCLUDE_DIRS})
-  foreach(_T ${TARGETS})
+  foreach(_T ${TARGET_EXECUTABLES})
     target_link_libraries(${_T} ${NETCDF_LIBRARIES})
   endforeach()
 endif()
@@ -810,65 +895,32 @@ endif()
 if(WORLD_BUILDER_VERSION VERSION_GREATER_EQUAL 0.6.0 AND ASPECT_WITH_WORLD_BUILDER)
   message(STATUS "Linking ASPECT against WorldBuilder")
   if(${ASPECT_BUILD_DEBUG} STREQUAL "ON")
-    target_include_directories(${TARGET} PUBLIC "${CMAKE_BINARY_DIR}/world_builder/include/")
-    target_link_libraries(${TARGET} WorldBuilderDebug)
+    target_include_directories(${TARGET_EXE_DEBUG} PUBLIC "${CMAKE_BINARY_DIR}/world_builder/include/")
+    target_link_libraries(${TARGET_EXE_DEBUG} WorldBuilderDebug)
   endif()
 
   if(${ASPECT_BUILD_RELEASE} STREQUAL "ON")
-    target_include_directories(${TARGET}-release PUBLIC "${CMAKE_BINARY_DIR}/world_builder_release/include/")
-    target_link_libraries(${TARGET}-release WorldBuilderRelease)
+    target_include_directories(${TARGET_EXE_RELEASE} PUBLIC "${CMAKE_BINARY_DIR}/world_builder_release/include/")
+    target_link_libraries(${TARGET_EXE_RELEASE} WorldBuilderRelease)
   endif()
 endif()
 
 # Some systems need to explicitly link to some libraries to use dlopen
 if(ASPECT_USE_SHARED_LIBS)
   message(STATUS "Linking ASPECT against dlopen")
-  foreach(_T ${TARGETS})
+  foreach(_T ${TARGET_EXECUTABLES})
     target_link_libraries(${_T} ${CMAKE_DL_LIBS})
   endforeach()
 endif()
 
 
 
-#
-# generate config.h
-#
-
-# Define macro with the source directory that will be exported in
-# config.h. This can be used to hard-code the location of data files, such as
-# in $ASPECT_SOURCE_DIR/data/velocity-boundary-conditions/gplates/*
-set(ASPECT_SOURCE_DIR ${CMAKE_SOURCE_DIR})
-
-# And finally generate the file
-configure_file(
-  ${CMAKE_SOURCE_DIR}/include/aspect/config.h.in
-  ${CMAKE_BINARY_DIR}/include/aspect/config.h
-  )
-
-
-# Check if we want to precompile header files. This speeds up compile time,
-# but can fail on some machines with old CMake. Starting with CMake 3.16
-# there is native support inside CMake and we can precompile headers.
-if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.16)
-  set(ASPECT_PRECOMPILE_HEADERS ON CACHE BOOL "Precompile external header files to speedup compile time. Currently only supported for CMake 3.16 and newer versions.")
-  set(ASPECT_UNITY_BUILD ON CACHE BOOL "Combine source files into less compile targets to speedup compile time. Currently only supported for CMake 3.16 and newer versions.")
-else()
-  set(ASPECT_PRECOMPILE_HEADERS OFF CACHE BOOL "Precompile external header files to speedup compile time. Currently only supported for CMake 3.16 and newer versions." FORCE)
-  set(ASPECT_UNITY_BUILD OFF CACHE BOOL "Combine source files into less compile targets to speedup compile time. Currently only supported for CMake 3.16 and newer versions." FORCE)
-endif()
-
-if(ASPECT_PRECOMPILE_HEADERS AND CMAKE_CXX_COMPILER_ID MATCHES "Intel")
-  # Intel 19.1 produces internal compiler errors inside bundled boost with
-  # precompiled headers, so we deactivate it:
-  set(ASPECT_PRECOMPILE_HEADERS OFF CACHE BOOL "" FORCE)
-endif()
-
 if(ASPECT_PRECOMPILE_HEADERS)
   if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.16)
     message(STATUS "Precompiling common header files.")
     # Use the native cmake support to precompile some common headers
     # from ASPECT and deal.II that are frequently included, but rarely changed.
-    foreach(_T ${TARGETS})
+    foreach(_T ${TARGET_EXECUTABLES})
       TARGET_PRECOMPILE_HEADERS(${_T} PRIVATE
         <aspect/global.h> <aspect/plugins.h> <aspect/introspection.h> <aspect/parameters.h>)
       TARGET_PRECOMPILE_HEADERS(${_T} PRIVATE
@@ -880,14 +932,11 @@ if(ASPECT_PRECOMPILE_HEADERS)
   else()
     message(FATAL_ERROR "ASPECT_PRECOMPILE_HEADERS is currently only supported for CMake 3.16 and newer versions.")
   endif()
-
-else()
-  message(STATUS "Disabling precompiling headers.")
 endif()
 
 if(ASPECT_UNITY_BUILD)
   if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.16)
-    foreach(_T ${TARGETS})
+    foreach(_T ${TARGET_EXECUTABLES})
       set_property(TARGET ${_T} PROPERTY UNITY_BUILD TRUE)
     endforeach()
     message(STATUS "Combining source files into unity build.")
@@ -896,24 +945,24 @@ if(ASPECT_UNITY_BUILD)
   endif()
 else()
   if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.16)
-    set_property(TARGET ${TARGET} PROPERTY UNITY_BUILD FALSE)
+    foreach(_T ${TARGET_EXECUTABLES})
+      set_property(TARGET ${_T} PROPERTY UNITY_BUILD FALSE)
+    endforeach()
   endif()
-
-  message(STATUS "Disabling unity build.")
 endif()
 
 
 #
 ## installation
 #
-# binary:
-install(TARGETS ${TARGETS}
+# binaries:
+install(TARGETS ${TARGET_EXECUTABLES}
   RUNTIME DESTINATION bin
   COMPONENT runtime)
 
-# make sure we have the rpath to our dependencies set:
 
-foreach(_T ${TARGETS})
+# make sure we have the rpath to our dependencies set:
+foreach(_T ${TARGET_EXECUTABLES})
   set_property(TARGET ${_T} PROPERTY INSTALL_RPATH_USE_LINK_PATH TRUE)
 endforeach()
 
@@ -964,51 +1013,6 @@ MESSAGE(STATUS "===== Configuring ASPECT documentation =============")
 # Start with the documentation
 
 add_subdirectory(doc)
-
-
-# Find the deal.II parameter GUI and install helper script
-find_program(PARAMETER_GUI_EXECUTABLE
-        parameter_gui
-        HINTS $ENV{PARAMETER_GUI_DIR} $ENV{PARAMETER_GUI_DIR}/bin ${PARAMETER_GUI_DIR} ${PARAMETER_GUI_DIR}/bin
-        PATH bin)
-mark_as_advanced(CLEAR PARAMETER_GUI_EXECUTABLE)
-
-# Did the user specify something that doesn't exist?
-if(PARAMETER_GUI_EXECUTABLE
-        AND
-    (NOT EXISTS ${PARAMETER_GUI_EXECUTABLE} OR IS_DIRECTORY ${PARAMETER_GUI_EXECUTABLE}))
-  message(STATUS "Warning: PARAMETER_GUI_EXECUTABLE '${PARAMETER_GUI_EXECUTABLE}' does not exist")
-  set(PARAMETER_GUI_EXECUTABLE "PARAMETER_GUI_EXECUTABLE-NOTFOUND" CACHE FILEPATH "" FORCE)
-endif()
-
-if(NOT PARAMETER_GUI_EXECUTABLE)
-  message(STATUS "Parameter GUI not found: install and provide a hint using -D PARAMETER_GUI_DIR or set -D PARAMETER_GUI_EXECUTABLE directly.")
-else()
-  message(STATUS "Found parameter GUI at: ${PARAMETER_GUI_EXECUTABLE}")
-  configure_file(
-    ${CMAKE_SOURCE_DIR}/doc/aspect-gui
-    ${CMAKE_BINARY_DIR}/aspect-gui
-    @ONLY
-  )
-install(FILES ${CMAKE_BINARY_DIR}/aspect-gui
-        DESTINATION bin
-        PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
-                GROUP_READ GROUP_EXECUTE
-                WORLD_READ WORLD_EXECUTE)
-endif()
-
-
-
-# A target to create parameters.json after building the ASPECT binary.
-
-add_custom_command(TARGET ${TARGET} POST_BUILD
-  COMMAND sh -c 'echo "" | ./aspect --output-json -- > parameters.json'
-  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
-
-
-
-message(STATUS "")
-message(STATUS "===== Writing final configuration ==================")
 
 include(cmake/write_config)
 

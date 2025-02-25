@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2015 - 2022 by the authors of the ASPECT code.
+  Copyright (C) 2015 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -36,8 +36,6 @@ namespace aspect
    */
   namespace BoundaryFluidPressure
   {
-    using namespace dealii;
-
     /**
      * Base class
      *

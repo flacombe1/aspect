@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2022 by the authors of the ASPECT code.
+  Copyright (C) 2022 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -26,8 +26,6 @@
 #include <iostream>
 
 using namespace aspect;
-using namespace dealii;
-
 bool test_point(const GeometryModel::internal::EllipsoidalChunkGeometry<3> ellipsoidal_manifold,
                 const Point<3> &test_point)
 {
@@ -84,7 +82,7 @@ int f()
 
   const double semi_major_axis_a = 6378137.0;
   const double eccentricity = 8.1819190842622e-2;
-  const double semi_minor = std::sqrt((1 - pow(eccentricity,2)) * pow(semi_major_axis_a,2));
+  const double semi_minor = std::sqrt((1 - dealii::Utilities::fixed_power<2>(eccentricity)) * dealii::Utilities::fixed_power<2>(semi_major_axis_a));
   {
     std::cout << "WGS84 test" << std::endl;
 

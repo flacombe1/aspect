@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2023 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -33,8 +33,6 @@ namespace aspect
 {
   namespace MaterialModel
   {
-    using namespace dealii;
-
     template <int dim>
     class ExponentialDecay : public MaterialModel::Interface<dim>, public ::aspect::SimulatorAccess<dim>
     {
@@ -64,8 +62,6 @@ namespace aspect
 
   namespace HeatingModel
   {
-    using namespace dealii;
-
     template <int dim>
     class ExponentialDecayHeating : public HeatingModel::Interface<dim>, public ::aspect::SimulatorAccess<dim>
     {
@@ -126,7 +122,7 @@ namespace aspect
           for (unsigned int q=0; q < in.n_evaluation_points(); ++q)
             {
               // dC/dt = - z * lambda * C
-              const double decay_constant = half_life > 0.0 ? log(2.0) / half_life : 0.0;
+              const double decay_constant = half_life > 0.0 ? std::log(2.0) / half_life : 0.0;
               const double z = in.position[q](1);
               reaction_out->reaction_rates[q][0] = - decay_constant * z / time_scale * in.composition[q][0];
             }
@@ -225,7 +221,7 @@ namespace aspect
       for (unsigned int q=0; q<heating_model_outputs.heating_source_terms.size(); ++q)
         {
           // dC/dt = - z * lambda * C
-          const double decay_constant = half_life > 0.0 ? log(2.0) / half_life : 0.0;
+          const double decay_constant = half_life > 0.0 ? std::log(2.0) / half_life : 0.0;
           const double z = in.position[q](1);
           heating_model_outputs.rates_of_temperature_change[q] = - decay_constant * z / time_scale * in.composition[q][0];
 
@@ -290,8 +286,8 @@ namespace aspect
         values[0] = 0.0; // velocity x
         values[1] = 0.0; // velocity z
         values[2] = 0.0; // pressure
-        values[3] = sin(2*numbers::PI*(x-t*0.01))*exp(-log(2.0)/10.0*z*t); // temperature
-        values[4] = sin(2*numbers::PI*(x-t*0.01))*exp(-log(2.0)/10.0*z*t); // composition
+        values[3] = std::sin(2*numbers::PI*(x-t*0.01))*std::exp(-std::log(2.0)/10.0*z*t); // temperature
+        values[4] = std::sin(2*numbers::PI*(x-t*0.01))*std::exp(-std::log(2.0)/10.0*z*t); // composition
       }
   };
 
@@ -324,7 +320,7 @@ namespace aspect
 
     double t = this->get_time() / time_scale;
 
-    return sin(2*numbers::PI*(x-t*0.01))*exp(-log(2.0)/10.0*z*t);
+    return std::sin(2*numbers::PI*(x-t*0.01))*std::exp(-std::log(2.0)/10.0*z*t);
   }
 
 
@@ -358,7 +354,7 @@ namespace aspect
 
     double t = this->get_time() / time_scale;
 
-    return sin(2*numbers::PI*(x-t*0.01))*exp(-log(2.0)/10.0*z*t);
+    return std::sin(2*numbers::PI*(x-t*0.01))*std::exp(-std::log(2.0)/10.0*z*t);
   }
 
   template <int dim>

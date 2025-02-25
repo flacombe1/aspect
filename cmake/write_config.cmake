@@ -1,4 +1,4 @@
-# Copyright (C) 2013 - 2023 by the authors of the ASPECT code.
+# Copyright (C) 2013 - 2024 by the authors of the ASPECT code.
 #
 # This file is part of ASPECT.
 #
@@ -49,7 +49,6 @@ _detailed(
 #        CMAKE_BINARY_DIR:          ${CMAKE_BINARY_DIR}
 #        CMAKE_CXX_COMPILER:        ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION} on platform ${CMAKE_SYSTEM_NAME} ${CMAKE_SYSTEM_PROCESSOR}
 #                                   ${CMAKE_CXX_COMPILER}
-#        PARAMETER_GUI_EXECUTABLE:  ${PARAMETER_GUI_EXECUTABLE}
 ")
 
 if(CMAKE_C_COMPILER_WORKS)
@@ -70,7 +69,7 @@ _detailed(
 ")
 endif()
 
-foreach(_T ${TARGETS})
+foreach(_T ${TARGETS_EXECUTABLES})
 
   get_property(ASPECT_COMPILE_OPTIONS TARGET ${_T} PROPERTY COMPILE_OPTIONS)
   get_property(ASPECT_COMPILE_DEFINITIONS TARGET ${_T} PROPERTY COMPILE_DEFINITIONS)

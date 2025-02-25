@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2015 - 2022 by the authors of the ASPECT code.
+  Copyright (C) 2015 - 2023 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -30,8 +30,6 @@ namespace aspect
 {
   namespace MaterialModel
   {
-    using namespace dealii;
-
     /**
      * A material model that implements a simple formulation of the
      * material parameters required for the modeling of melt transport

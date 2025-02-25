@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2018 - 2023 by the authors of the ASPECT code.
+  Copyright (C) 2018 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -51,8 +51,6 @@ using GMGNumberType = double;
 
 namespace aspect
 {
-  using namespace dealii;
-
   namespace internal
   {
     /**
@@ -299,14 +297,14 @@ namespace aspect
                           const dealii::LinearAlgebra::distributed::Vector<number> &src,
                           const std::pair<unsigned int, unsigned int> &cell_range) const;
 
-
         /**
-         * Computes the diagonal contribution from a cell matrix.
+         * This function contains the inner-most operation done on a single cell
          */
-        void local_compute_diagonal (const MatrixFree<dim,number>                     &data,
-                                     dealii::LinearAlgebra::distributed::Vector<number>  &dst,
-                                     const unsigned int                               &dummy,
-                                     const std::pair<unsigned int,unsigned int>       &cell_range) const;
+        void inner_cell_operation(FEEvaluation<dim,
+                                  degree_p,
+                                  degree_p+2,
+                                  1,
+                                  number> &pressure) const;
 
         /**
          * A pointer to the current cell data that contains viscosity and other required parameters per cell.
@@ -411,10 +409,15 @@ namespace aspect
       virtual ~StokesMatrixFreeHandler() = default;
 
       /**
-       * Solves the Stokes linear system matrix-free. This is called
-       * by Simulator<dim>::solve_stokes().
+       * Solves the Stokes linear system using the matrix-free
+       * solver.
+       *
+       * @param solution_vector The existing solution vector that will be
+       * updated with the new solution. This vector is expected to have the
+       * block structure of the full solution vector, and its velocity and
+       * pressure blocks will be updated with the new solution.
        */
-      virtual std::pair<double,double> solve()=0;
+      virtual std::pair<double,double> solve(LinearAlgebra::BlockVector &solution_vector) = 0;
 
       /**
        * Allocates and sets up the members of the StokesMatrixFreeHandler. This
@@ -528,10 +531,15 @@ namespace aspect
       ~StokesMatrixFreeHandlerImplementation() override = default;
 
       /**
-       * Solves the Stokes linear system matrix-free. This is called
-       * by Simulator<dim>::solve_stokes().
+       * Solves the Stokes linear system using the matrix-free
+       * solver.
+       *
+       * @param solution_vector The existing solution vector that will be
+       * updated with the new solution. This vector is expected to have the
+       * block structure of the full solution vector, and its velocity and
+       * pressure blocks will be updated with the new solution.
        */
-      std::pair<double,double> solve() override;
+      std::pair<double,double> solve(LinearAlgebra::BlockVector &solution_vector) override;
 
       /**
        * Allocates and sets up the members of the StokesMatrixFreeHandler. This

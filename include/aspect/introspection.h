@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2023 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -35,8 +35,6 @@
 
 namespace aspect
 {
-  using namespace dealii;
-
   /**
    * Helper function to construct the default list of variables to use
    * based on the given set of @p parameters.
@@ -71,7 +69,7 @@ namespace aspect
 
     /**
      * The number of different types defined in Type.
-    */
+     */
     constexpr static unsigned int n_types = 9;
 
     /**
@@ -178,10 +176,10 @@ namespace aspect
        */
       struct ComponentIndices
       {
-        unsigned int       velocities[dim];
-        unsigned int       pressure;
-        unsigned int       temperature;
-        std::vector<unsigned int> compositional_fields;
+        std::array<unsigned int, dim> velocities;
+        unsigned int                  pressure;
+        unsigned int                  temperature;
+        std::vector<unsigned int>     compositional_fields;
       };
       /**
        * A variable that enumerates the vector components of the finite
@@ -275,9 +273,11 @@ namespace aspect
        */
       struct PolynomialDegree
       {
-        unsigned int       velocities;
-        unsigned int       temperature;
-        unsigned int       compositional_fields;
+        unsigned int              max_degree;
+        unsigned int              velocities;
+        unsigned int              temperature;
+        std::vector<unsigned int> compositional_fields;
+        unsigned int              max_compositional_field;
       };
 
       /**
@@ -310,7 +310,8 @@ namespace aspect
         Quadrature<dim>       velocities;
         Quadrature<dim>       pressure;
         Quadrature<dim>       temperature;
-        Quadrature<dim>       compositional_fields;
+        Quadrature<dim>       compositional_field_max;
+        std::vector<Quadrature<dim>> compositional_fields;
         Quadrature<dim>       system;
       };
 
@@ -350,12 +351,36 @@ namespace aspect
        */
       struct ComponentMasks
       {
-        ComponentMasks (FEVariableCollection<dim> &fevs);
+        ComponentMasks (const FEVariableCollection<dim> &fevs, const Introspection<dim>::ComponentIndices &indices);
 
+        /**
+         * The component mask for all velocity components.
+         */
         ComponentMask              velocities;
+
+        /**
+         * The component mask for the pressure component.
+         */
         ComponentMask              pressure;
+
+        /**
+         * The component mask for the temperature component.
+         */
         ComponentMask              temperature;
+
+        /**
+         * The component mask for each individual compositional field.
+         * The size of this vector is equal to the number of compositional fields.
+         * Each entry is a component mask that selects the component
+         * that corresponds to the respective compositional field.
+         */
         std::vector<ComponentMask> compositional_fields;
+
+        /**
+         * The component mask for all composition components.
+         * This mask selects all compositional fields.
+         */
+        ComponentMask              compositions;
       };
 
       /**

@@ -1,0 +1,150 @@
+Invalid MIT-MAGIC-COOKIE-1 keyInvalid MIT-MAGIC-COOKIE-1 keyInvalid MIT-MAGIC-COOKIE-1 keyInvalid MIT-MAGIC-COOKIE-1 keyInvalid MIT-MAGIC-COOKIE-1 keyInvalid MIT-MAGIC-COOKIE-1 keyInvalid MIT-MAGIC-COOKIE-1 keyInvalid MIT-MAGIC-COOKIE-1 keyInvalid MIT-MAGIC-COOKIE-1 keyInvalid MIT-MAGIC-COOKIE-1 keyInvalid MIT-MAGIC-COOKIE-1 keyInvalid MIT-MAGIC-COOKIE-1 keyInvalid MIT-MAGIC-COOKIE-1 keyInvalid MIT-MAGIC-COOKIE-1 key-----------------------------------------------------------------------------
+--                             This is ASPECT                              --
+-- The Advanced Solver for Planetary Evolution, Convection, and Tectonics. --
+-----------------------------------------------------------------------------
+--     . version 2.6.0-pre (nonlinear_fail_strategy, 9fa49108b)
+--     . using deal.II 9.5.1
+--     .       with 32 bit indices
+--     .       with vectorization level 2 (AVX, 4 doubles, 256 bits)
+--     . using Trilinos 13.2.0
+--     . using p4est 2.3.2
+--     . using Geodynamic World Builder 0.6.0
+--     . running in OPTIMIZED mode
+--     . running with 8 MPI processes
+-----------------------------------------------------------------------------
+
+
+
+----------------------------------------------------
+Exception 'ExcMessage (std::string("Could not successfully load shared library <") + filename + ">. The operating system reports " + "that the error is this: <" + dlerror() + ">. Did you call 'cmake' and then compile " "the plugin library you are trying to load, and did " "you check the spelling of the library's name? " "Are you running ASPECT in a directory so that the path " "to the library in question is as specified in the " ".prm file?")' on rank 4 on processing: 
+
+
+----------------------------------------------------
+Exception 'ExcMessage (std::string("Could not successfully load shared library <") + filename + ">. The operating system reports " + "that the error is this: <" + dlerror() + ">. Did you call 'cmake' and then compile " "the plugin library you are trying to load, and did " "you check the spelling of the library's name? " "Are you running ASPECT in a directory so that the path " "to the library in question is as specified in the " ".prm file?")' on rank 6 on processing: 
+
+--------------------------------------------------------
+An error occurred in line <287> of file </home/fredericklacombe/software/aspect/source/main.cc> in function
+    void possibly_load_shared_libs(const string&)
+The violated condition was: 
+    handle != nullptr
+Additional information: 
+    Could not successfully load shared library
+    <./plugin/libsolubility.release.so>. The operating system reports that
+    the error is this: <./plugin/libsolubility.release.so: undefined
+    symbol:
+    _ZN6aspect13MaterialModel9InterfaceILi3EE16parse_parametersERN6dealii16ParameterHandlerE>.
+    Did you call 'cmake' and then compile the plugin library you are
+    trying to load, and did you check the spelling of the library's name?
+    Are you running ASPECT in a directory so that the path to the library
+    in question is as specified in the .prm file?
+
+Stacktrace:
+-----------
+#0  /home/fredericklacombe/software/aspect/build-nonlinear_fail_strategy/./aspect-release: possibly_load_shared_libs(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)
+#1  /home/fredericklacombe/software/aspect/build-nonlinear_fail_strategy/./aspect-release: main
+--------------------------------------------------------
+
+Aborting!
+----------------------------------------------------
+--------------------------------------------------------------------------
+MPI_ABORT was invoked on rank 4 in communicator MPI_COMM_WORLD
+with errorcode 1.
+
+NOTE: invoking MPI_ABORT causes Open MPI to kill all MPI processes.
+You may or may not see output from other processes, depending on
+exactly when Open MPI kills them.
+--------------------------------------------------------------------------
+
+--------------------------------------------------------
+An error occurred in line <287> of file </home/fredericklacombe/software/aspect/source/main.cc> in function
+    void possibly_load_shared_libs(const string&)
+The violated condition was: 
+    handle != nullptr
+Additional information: 
+    Could not successfully load shared library
+    <./plugin/libsolubility.release.so>. The operating system reports that
+    the error is this: <./plugin/libsolubility.release.so: undefined
+    symbol:
+    _ZN6aspect13MaterialModel9InterfaceILi3EE16parse_parametersERN6dealii16ParameterHandlerE>.
+    Did you call 'cmake' and then compile the plugin library you are
+    trying to load, and did you check the spelling of the library's name?
+    Are you running ASPECT in a directory so that the path to the library
+    in question is as specified in the .prm file?
+
+Stacktrace:
+-----------
+#0  /home/fredericklacombe/software/aspect/build-nonlinear_fail_strategy/./aspect-release: possibly_load_shared_libs(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)
+#1  /home/fredericklacombe/software/aspect/build-nonlinear_fail_strategy/./aspect-release: main
+--------------------------------------------------------
+
+Aborting!
+----------------------------------------------------
+
+
+----------------------------------------------------
+Exception 'ExcMessage (std::string("Could not successfully load shared library <") + filename + ">. The operating system reports " + "that the error is this: <" + dlerror() + ">. Did you call 'cmake' and then compile " "the plugin library you are trying to load, and did " "you check the spelling of the library's name? " "Are you running ASPECT in a directory so that the path " "to the library in question is as specified in the " ".prm file?")' on rank 0 on processing: 
+
+
+----------------------------------------------------
+Exception 'ExcMessage (std::string("Could not successfully load shared library <") + filename + ">. The operating system reports " + "that the error is this: <" + dlerror() + ">. Did you call 'cmake' and then compile " "the plugin library you are trying to load, and did " "you check the spelling of the library's name? " "Are you running ASPECT in a directory so that the path " "to the library in question is as specified in the " ".prm file?")' on rank 2 on processing: 
+
+--------------------------------------------------------
+An error occurred in line <287> of file </home/fredericklacombe/software/aspect/source/main.cc> in function
+    void possibly_load_shared_libs(const string&)
+The violated condition was: 
+    handle != nullptr
+Additional information: 
+    Could not successfully load shared library
+    <./plugin/libsolubility.release.so>. The operating system reports that
+    the error is this: <./plugin/libsolubility.release.so: undefined
+    symbol:
+    _ZN6aspect13MaterialModel9InterfaceILi3EE16parse_parametersERN6dealii16ParameterHandlerE>.
+    Did you call 'cmake' and then compile the plugin library you are
+    trying to load, and did you check the spelling of the library's name?
+    Are you running ASPECT in a directory so that the path to the library
+    in question is as specified in the .prm file?
+
+Stacktrace:
+-----------
+#0  /home/fredericklacombe/software/aspect/build-nonlinear_fail_strategy/./aspect-release: possibly_load_shared_libs(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)
+#1  /home/fredericklacombe/software/aspect/build-nonlinear_fail_strategy/./aspect-release: main
+--------------------------------------------------------
+
+Aborting!
+----------------------------------------------------
+Loading shared library <./plugin/libsolubility.release.so>
+
+
+----------------------------------------------------
+Exception 'ExcMessage (std::string("Could not successfully load shared library <") + filename + ">. The operating system reports " + "that the error is this: <" + dlerror() + ">. Did you call 'cmake' and then compile " "the plugin library you are trying to load, and did " "you check the spelling of the library's name? " "Are you running ASPECT in a directory so that the path " "to the library in question is as specified in the " ".prm file?")' on rank 3 on processing: 
+
+
+----------------------------------------------------
+Exception 'ExcMessage (std::string("Could not successfully load shared library <") + filename + ">. The operating system reports " + "that the error is this: <" + dlerror() + ">. Did you call 'cmake' and then compile " "the plugin library you are trying to load, and did " "you check the spelling of the library's name? " "Are you running ASPECT in a directory so that the path " "to the library in question is as specified in the " ".prm file?")' on rank 5 on processing: 
+
+--------------------------------------------------------
+An error occurred in line <287> of file </home/fredericklacombe/software/aspect/source/main.cc> in function
+    void possibly_load_shared_libs(const string&)
+The violated condition was: 
+    handle != nullptr
+Additional information: 
+    Could not successfully load shared library
+    <./plugin/libsolubility.release.so>. The operating system reports that
+    the error is this: <./plugin/libsolubility.release.so: undefined
+    symbol:
+    _ZN6aspect13MaterialModel9InterfaceILi3EE16parse_parametersERN6dealii16ParameterHandlerE>.
+    Did you call 'cmake' and then compile the plugin library you are
+    trying to load, and did you check the spelling of the library's name?
+    Are you running ASPECT in a directory so that the path to the library
+    in question is as specified in the .prm file?
+
+Stacktrace:
+-----------
+#0  /home/fredericklacombe/software/aspect/build-nonlinear_fail_strategy/./aspect-release: possibly_load_shared_libs(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)
+#1  /home/fredericklacombe/software/aspect/build-nonlinear_fail_strategy/./aspect-release: main
+--------------------------------------------------------
+
+Aborting!
+----------------------------------------------------
+[system76-pc:2390797] 2 more processes have sent help message help-mpi-api.txt / mpi-abort
+[system76-pc:2390797] Set MCA parameter "orte_base_help_aggregate" to 0 to see all help / error messages

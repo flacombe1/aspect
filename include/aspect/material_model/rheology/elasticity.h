@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2019 - 2022 by the authors of the ASPECT code.
+  Copyright (C) 2019 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -31,8 +31,6 @@ namespace aspect
 {
   namespace MaterialModel
   {
-    using namespace dealii;
-
     /**
      * Additional output fields for the elastic shear modulus to be added to
      * the MaterialModel::MaterialModelOutputs structure and filled in the

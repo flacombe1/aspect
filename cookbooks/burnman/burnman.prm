@@ -5,8 +5,8 @@
 
 set Dimension                              = 2
 set Use years in output instead of seconds = true
-set End time                               = 2.63e8
-set Output directory                       = output-burnman
+set End time                               = 0
+set Output directory                       = output-burnman_constant_density
 
 subsection Material model
   set Model name = ascii reference profile
@@ -17,8 +17,8 @@ subsection Material model
     set Viscosity prefactors = 1.0, 0.1, 1.0, 10.0
 
     subsection Ascii data model
-      set Data directory = $ASPECT_SOURCE_DIR/data/adiabatic-conditions/ascii-data/
-      set Data file name = example_isentrope.txt
+      set Data directory = ~/software/aspect/data/adiabatic-conditions/ascii-data/
+      set Data file name = example_isentrope_constant_density.txt
     end
   end
 end
@@ -38,8 +38,8 @@ subsection Adiabatic conditions model
   set Model name = ascii data
 
   subsection Ascii data model
-    set Data directory = $ASPECT_SOURCE_DIR/data/adiabatic-conditions/ascii-data/
-    set Data file name = example_isentrope.txt
+    set Data directory = ~/software/aspect/data/adiabatic-conditions/ascii-data/
+    set Data file name = example_isentrope_constant_density.txt
   end
 end
 
@@ -51,8 +51,8 @@ subsection Gravity model
   set Model name = ascii data
 
   subsection Ascii data model
-    set Data directory = $ASPECT_SOURCE_DIR/data/adiabatic-conditions/ascii-data/
-    set Data file name = example_isentrope.txt
+    set Data directory = ~/software/aspect/data/adiabatic-conditions/ascii-data/
+    set Data file name = example_isentrope_constant_density.txt
   end
 end
 
@@ -68,7 +68,7 @@ subsection Boundary velocity model
   set Tangential velocity boundary indicators = bottom
 
   subsection GPlates model
-    set Data directory = $ASPECT_SOURCE_DIR/data/boundary-velocity/gplates/
+    set Data directory = ~/software/aspect/data/boundary-velocity/gplates/
     set Velocity file name = current_day.gpml
     set Data file time step = 1e6
     set Point one = 1.5708,4.87

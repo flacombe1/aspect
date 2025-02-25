@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2016 - 2022 by the authors of the ASPECT code.
+  Copyright (C) 2016 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -24,7 +24,6 @@
 #include <aspect/simulator/assemblers/stokes.h>
 
 #include <aspect/simulator.h>
-#include <aspect/citation_info.h>
 
 namespace aspect
 {
@@ -97,7 +96,7 @@ namespace aspect
                              " defined that handles this formulation."));
 
     // add the terms for traction boundary conditions
-    if (!this->get_boundary_traction_manager().get_active_boundary_traction_names().empty())
+    if (!this->get_boundary_traction_manager().get_prescribed_boundary_traction_indicators().empty())
       {
         assemblers.stokes_system_on_boundary_face.push_back(
           std::make_unique<aspect::Assemblers::StokesBoundaryTraction<dim>>());

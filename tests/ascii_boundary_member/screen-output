@@ -2,13 +2,13 @@
 Loading shared library <./libascii_boundary_member.debug.so>
 
 
+   Loading Ascii data boundary file ASPECT_DIR/data/boundary-velocity/ascii-data/test/box_2d_bottom.0.txt.
+
+
    Loading Ascii data boundary file ASPECT_DIR/data/boundary-velocity/ascii-data/test/box_2d_left.0.txt.
 
 
    Loading Ascii data boundary file ASPECT_DIR/data/boundary-velocity/ascii-data/test/box_2d_right.0.txt.
-
-
-   Loading Ascii data boundary file ASPECT_DIR/data/boundary-velocity/ascii-data/test/box_2d_bottom.0.txt.
 
 
    Loading Ascii data boundary file ASPECT_DIR/data/boundary-velocity/ascii-data/test/box_2d_top.0.txt.
@@ -18,7 +18,7 @@ Number of degrees of freedom: 1,212 (738+105+369)
 
 *** Timestep 0:  t=0 years, dt=0 years
    Solving temperature system... 0 iterations.
-   Solving Stokes system... 22+0 iterations.
+   Solving Stokes system (GMG)... 22+0 iterations.
 
    Postprocessing:
      RMS, max velocity:                  0.00616 m/year, 0.0156 m/year
@@ -27,7 +27,7 @@ Number of degrees of freedom: 1,212 (738+105+369)
 
 *** Timestep 1:  t=1e+06 years, dt=1e+06 years
    Solving temperature system... 9 iterations.
-   Solving Stokes system... 19+0 iterations.
+   Solving Stokes system (GMG)... 19+0 iterations.
 
    Postprocessing:
      RMS, max velocity:                  0.00627 m/year, 0.0159 m/year

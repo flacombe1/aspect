@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2022 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -26,11 +26,12 @@
 
 #include <deal.II/base/utilities.h>
 #include <deal.II/base/parameter_handler.h>
-#include <tuple>
 #include <deal.II/base/exceptions.h>
+#include <deal.II/fe/component_mask.h>
 
 #include <boost/core/demangle.hpp>
 
+#include <tuple>
 #include <string>
 #include <list>
 #include <set>
@@ -46,8 +47,6 @@ namespace aspect
 
   namespace Plugins
   {
-    using namespace dealii;
-
     /**
      * This function returns if a given plugin (e.g. a material model returned
      * from SimulatorAccess::get_material_model() ) matches a certain plugin
@@ -114,9 +113,6 @@ namespace aspect
 
   namespace Plugins
   {
-    using namespace dealii;
-
-
     /**
      * A base class for all plugin systems. The class ensures that a
      * common set of functions is declared as `virtual` (namely, the
@@ -214,6 +210,11 @@ namespace aspect
     {
       public:
         /**
+         * Destructor.
+         */
+        ~ManagerBase () override;
+
+        /**
          * A function that is called at the beginning of each time step,
          * calling the update function of the individual heating models.
          */
@@ -232,7 +233,7 @@ namespace aspect
         template <typename PluginType,
                   typename = typename std::enable_if_t<std::is_base_of<InterfaceType,PluginType>::value>>
         bool
-        has_matching_plugin_object () const;
+        has_matching_active_plugin () const;
 
         /**
          * Go through the list of all plugins that have been selected
@@ -242,13 +243,33 @@ namespace aspect
          * to it. If no postprocessor is active that matches the given type,
          * throw an exception.
          *
+         * The returned object is necessarily an element in the list returned by
+         * `get_active_plugins()`, but cast to a derived type.
+         *
          * This function can only be called if the given template type (the first template
          * argument) is a class derived from the Interface class in this namespace.
          */
         template <typename PluginType,
                   typename = typename std::enable_if_t<std::is_base_of<InterfaceType,PluginType>::value>>
         const PluginType &
-        get_matching_plugin_object () const;
+        get_matching_active_plugin () const;
+
+        /**
+         * Return a list of plugin objects that have been requested in the
+         * parameter file and that are, consequently, active in the current
+         * manager object.
+         */
+        const std::list<std::unique_ptr<InterfaceType>> &
+        get_active_plugins () const;
+
+        /**
+         * Return a list of names used in the input file to select plugins,
+         * and that are, consequently, active in the current manager object.
+         * The names in the returned list correspond to the objects returned
+         * by `get_active_plugins()`.
+         */
+        const std::vector<std::string> &
+        get_active_plugin_names () const;
 
       protected:
         /**
@@ -256,15 +277,85 @@ namespace aspect
          * parameter file.
          */
         std::list<std::unique_ptr<InterfaceType>> plugin_objects;
+
+        /**
+         * A list of names used in the input file to identify plugins,
+         * corresponding to the plugin objects stored in the previous variable.
+         */
+        std::vector<std::string> plugin_names;
     };
+
+
+
+    template <typename InterfaceType>
+    ManagerBase<InterfaceType>::~ManagerBase()
+    {
+      // only check and throw if we are not unwinding the stack due
+      // to an active exception
+#ifdef DEAL_II_HAVE_CXX17
+      if (std::uncaught_exceptions() == 0)
+#else
+      if (std::uncaught_exception() == false)
+#endif
+        {
+          Assert (plugin_names.size() == plugin_objects.size(), ExcInternalError());
+        }
+    }
 
 
     template <typename InterfaceType>
     void ManagerBase<InterfaceType>::update()
     {
-      for (const auto &plugin : plugin_objects)
+      // call the update() functions of all plugins:
+      for (const auto &p : plugin_objects)
         {
-          plugin->update();
+          try
+            {
+              p->update ();
+            }
+
+          // plugins that throw exceptions usually do not result in
+          // anything good because they result in an unwinding of the stack
+          // and, if only one processor triggers an exception, the
+          // destruction of objects often causes a deadlock. thus, if
+          // an exception is generated, catch it, print an error message,
+          // and abort the program
+          catch (std::exception &exc)
+            {
+              std::cerr << std::endl << std::endl
+                        << "----------------------------------------------------"
+                        << std::endl;
+              std::cerr << "Exception on MPI process <"
+                        << dealii::Utilities::MPI::this_mpi_process(MPI_COMM_WORLD)
+                        << "> while running plugin <"
+                        << typeid(*p).name()
+                        << ">: " << std::endl
+                        << exc.what() << std::endl
+                        << "Aborting!" << std::endl
+                        << "----------------------------------------------------"
+                        << std::endl;
+
+              // terminate the program!
+              MPI_Abort (MPI_COMM_WORLD, 1);
+            }
+          catch (...)
+            {
+              std::cerr << std::endl << std::endl
+                        << "----------------------------------------------------"
+                        << std::endl;
+              std::cerr << "Exception on MPI process <"
+                        << dealii::Utilities::MPI::this_mpi_process(MPI_COMM_WORLD)
+                        << "> while running plugin <"
+                        << typeid(*p).name()
+                        << ">: " << std::endl;
+              std::cerr << "Unknown exception!" << std::endl
+                        << "Aborting!" << std::endl
+                        << "----------------------------------------------------"
+                        << std::endl;
+
+              // terminate the program!
+              MPI_Abort (MPI_COMM_WORLD, 1);
+            }
         }
     }
 
@@ -273,7 +364,7 @@ namespace aspect
     template <typename PluginType, typename>
     inline
     bool
-    ManagerBase<InterfaceType>::has_matching_plugin_object () const
+    ManagerBase<InterfaceType>::has_matching_active_plugin () const
     {
       for (const auto &p : plugin_objects)
         if (Plugins::plugin_type_matches<PluginType>(*p))
@@ -286,9 +377,9 @@ namespace aspect
     template <typename PluginType, typename>
     inline
     const PluginType &
-    ManagerBase<InterfaceType>::get_matching_plugin_object () const
+    ManagerBase<InterfaceType>::get_matching_active_plugin () const
     {
-      AssertThrow(has_matching_plugin_object<PluginType> (),
+      AssertThrow(has_matching_active_plugin<PluginType> (),
                   ExcMessage("You asked the object managing a collection of plugins for a "
                              "plugin object of type <" + boost::core::demangle(typeid(PluginType).name()) + "> "
                              "that could not be found in the current model. You need to "
@@ -302,6 +393,25 @@ namespace aspect
       // We will never get here, because we had the Assert above. Just to avoid warnings.
       return Plugins::get_plugin_as_type<PluginType>(**(plugin_objects.begin()));
     }
+
+
+
+    template <typename InterfaceType>
+    const std::list<std::unique_ptr<InterfaceType>> &
+    ManagerBase<InterfaceType>::get_active_plugins () const
+    {
+      return plugin_objects;
+    }
+
+
+
+    template <typename InterfaceType>
+    const std::vector<std::string> &
+    ManagerBase<InterfaceType>::get_active_plugin_names () const
+    {
+      return plugin_names;
+    }
+
   }
 
   namespace internal
@@ -312,10 +422,6 @@ namespace aspect
      */
     namespace Plugins
     {
-      using namespace dealii;
-
-
-
       /**
        * An internal class that is used in the definition of the
        * ASPECT_REGISTER_* macros. Given a registration function, a classname,
@@ -717,7 +823,7 @@ namespace aspect
         output_stream << std::string(typeid(InterfaceClass).name())
                       << " [label=\""
                       << plugin_system_name
-                      << "\", height=.8,width=.8,shape=\"rect\",fillcolor=\"green\"]"
+                      << "\", height=.8,width=.8,shape=\"rect\",fillcolor=\"lightgreen\"]"
                       << std::endl;
 
         // then output the graph nodes for each plugin, with links to the
@@ -800,6 +906,14 @@ namespace aspect
         // read when looking over stuff visually
         output_stream << std::endl;
       }
+
+
+      /**
+       * A placeholder class that is used wherever we need a PluginList object
+       * for `dim==0` and `dim==1`, which of course are not dimensions we
+       * support in ASPECT.
+       */
+      class UnusablePluginList {};
     }
   }
 }

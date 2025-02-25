@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2023 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2024 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -201,8 +201,21 @@ namespace aspect
     if (this->is_temperature())
       return introspection.polynomial_degree.temperature;
     else
-      return introspection.polynomial_degree.compositional_fields;
+      return introspection.polynomial_degree.compositional_fields[compositional_variable];
   }
+
+
+
+  template <int dim>
+  std::string
+  Simulator<dim>::AdvectionField::name(const Introspection<dim> &introspection) const
+  {
+    if (this->is_temperature())
+      return "temperature";
+    else
+      return "composition " + std::to_string(compositional_variable) + " (" + introspection.name_for_compositional_index(compositional_variable) + ")";
+  }
+
 
 
   template <int dim>
@@ -404,7 +417,7 @@ namespace aspect
     // of the viscosity. The order of magnitude is the logarithm of
     // the viscosity, so
     //
-    //   \eta_{ref} = exp ( 1/N * (log(eta_1) + log(eta_2) + ... + log(eta_N))
+    //   \eta_{ref} = exp( 1/N * (log(eta_1) + log(eta_2) + ... + log(eta_N))
     //
     // where the \eta_i are typical viscosities on the cells of the mesh.
     // For this, we just take the viscosity at the cell center.
@@ -538,7 +551,7 @@ namespace aspect
           {
             computing_timer.print_summary ();
             pcout << "-- Total wallclock time elapsed including restarts: "
-                  << round(wall_timer.wall_time()+total_walltime_until_last_snapshot)
+                  << std::round(wall_timer.wall_time()+total_walltime_until_last_snapshot)
                   << 's' << std::endl;
           }
 
@@ -653,7 +666,7 @@ namespace aspect
       {
         computing_timer.print_summary ();
         pcout << "-- Total wallclock time elapsed including restarts: "
-              << round(wall_timer.wall_time()+total_walltime_until_last_snapshot)
+              << std::round(wall_timer.wall_time()+total_walltime_until_last_snapshot)
               << 's' << std::endl;
       }
   }
@@ -810,7 +823,7 @@ namespace aspect
 
   template <int dim>
   void Simulator<dim>::interpolate_onto_velocity_system(const TensorFunction<1,dim> &func,
-                                                        LinearAlgebra::Vector &vec)
+                                                        LinearAlgebra::Vector &vec) const
   {
     Assert(introspection.block_indices.velocities == 0, ExcNotImplemented());
 
@@ -837,7 +850,13 @@ namespace aspect
 
     vec.compress(VectorOperation::insert);
 
+#if DEAL_II_VERSION_GTE(9,7,0)
+    AffineConstraints<double> hanging_node_constraints(introspection.index_sets.system_relevant_set,
+                                                       introspection.index_sets.system_relevant_set);
+#else
     AffineConstraints<double> hanging_node_constraints(introspection.index_sets.system_relevant_set);
+#endif
+
     DoFTools::make_hanging_node_constraints(dof_handler, hanging_node_constraints);
     hanging_node_constraints.close();
 
@@ -1066,8 +1085,7 @@ namespace aspect
   void
   Simulator<dim>::
   denormalize_pressure (const double                      pressure_adjustment,
-                        LinearAlgebra::BlockVector       &vector,
-                        const LinearAlgebra::BlockVector &relevant_vector) const
+                        LinearAlgebra::BlockVector       &vector) const
   {
     if (parameters.pressure_normalization == "no")
       return;
@@ -1087,6 +1105,17 @@ namespace aspect
                                                         finite_element.base_element(introspection.variable("fluid pressure").base_index).dofs_per_cell
                                                         : finite_element.base_element(introspection.base_elements.pressure).dofs_per_cell);
 
+            // We may touch the same DoF multiple times, so we need to copy the
+            // vector before modifying it to have access to the original value.
+            LinearAlgebra::BlockVector vector_backup;
+            vector_backup.reinit(vector, /* omit_zeroing_entries = */ true);
+            const unsigned int pressure_block_index =
+              parameters.include_melt_transport ?
+              introspection.variable("fluid pressure").block_index
+              :
+              introspection.block_indices.pressure;
+            vector_backup.block(pressure_block_index) = vector.block(pressure_block_index);
+
             std::vector<types::global_dof_index> local_dof_indices (finite_element.dofs_per_cell);
             for (const auto &cell : dof_handler.active_cell_iterators())
               if (cell->is_locally_owned())
@@ -1098,11 +1127,15 @@ namespace aspect
                         = finite_element.component_to_system_index(pressure_component,
                                                                    /*dof index within component=*/ j);
 
-                      // then adjust its value. Note that because we end up touching
+                      // Then adjust its value. vector could be a vector with ghost elements
+                      // or a fully distributed vector. In the latter case only access dofs that are
+                      // locally owned. Note that because we end up touching
                       // entries more than once, we are not simply incrementing
-                      // distributed_vector but copy from the unchanged vector.
-                      vector(local_dof_indices[local_dof_index])
-                        = relevant_vector(local_dof_indices[local_dof_index]) - pressure_adjustment;
+                      // vector but copy from the vector_backup copy.
+                      if (vector.has_ghost_elements() ||
+                          dof_handler.locally_owned_dofs().is_element(local_dof_indices[local_dof_index]))
+                        vector(local_dof_indices[local_dof_index])
+                          = vector_backup(local_dof_indices[local_dof_index]) - pressure_adjustment;
                     }
                 }
             vector.compress(VectorOperation::insert);
@@ -1125,7 +1158,20 @@ namespace aspect
                 ExcInternalError());
         Assert(!parameters.include_melt_transport, ExcNotImplemented());
         const unsigned int pressure_component = introspection.component_indices.pressure;
+
+        // We may touch the same DoF multiple times, so we need to copy the
+        // vector before modifying it to have access to the original value.
+        LinearAlgebra::BlockVector vector_backup;
+        vector_backup.reinit(vector, /* omit_zeroing_entries = */ true);
+        const unsigned int pressure_block_index =
+          parameters.include_melt_transport ?
+          introspection.variable("fluid pressure").block_index
+          :
+          introspection.block_indices.pressure;
+        vector_backup.block(pressure_block_index) = vector.block(pressure_block_index);
+
         std::vector<types::global_dof_index> local_dof_indices (finite_element.dofs_per_cell);
+
         for (const auto &cell : dof_handler.active_cell_iterators())
           if (cell->is_locally_owned())
             {
@@ -1135,12 +1181,11 @@ namespace aspect
                 = finite_element.component_to_system_index (pressure_component, 0);
 
               // make sure that this DoF is really owned by the current processor
-              // and that it is in fact a pressure dof
               Assert (dof_handler.locally_owned_dofs().is_element(local_dof_indices[first_pressure_dof]),
                       ExcInternalError());
 
               // then adjust its value
-              vector (local_dof_indices[first_pressure_dof]) = relevant_vector(local_dof_indices[first_pressure_dof])
+              vector (local_dof_indices[first_pressure_dof]) = vector_backup(local_dof_indices[first_pressure_dof])
                                                                - pressure_adjustment;
             }
 
@@ -1297,7 +1342,7 @@ namespace aspect
   {
     LinearAlgebra::BlockVector linearized_stokes_variables (introspection.index_sets.stokes_partitioning, mpi_communicator);
     LinearAlgebra::BlockVector residual (introspection.index_sets.stokes_partitioning, mpi_communicator);
-    const unsigned int block_p =
+    const unsigned int pressure_block_index =
       parameters.include_melt_transport ?
       introspection.variable("fluid pressure").block_index
       :
@@ -1305,7 +1350,7 @@ namespace aspect
 
     // if velocity and pressure are in the same block, we have to copy the
     // pressure to the solution and RHS vector with a zero velocity
-    if (block_p == introspection.block_indices.velocities)
+    if (pressure_block_index == introspection.block_indices.velocities)
       {
         const IndexSet &idxset = (parameters.include_melt_transport) ?
                                  introspection.index_sets.locally_owned_fluid_pressure_dofs
@@ -1317,27 +1362,19 @@ namespace aspect
             types::global_dof_index idx = idxset.nth_index_in_set(i);
             linearized_stokes_variables(idx)        = current_linearization_point(idx);
           }
-        linearized_stokes_variables.block(block_p).compress(VectorOperation::insert);
+        linearized_stokes_variables.block(pressure_block_index).compress(VectorOperation::insert);
       }
     else
-      linearized_stokes_variables.block (block_p) = current_linearization_point.block (block_p);
+      linearized_stokes_variables.block (pressure_block_index) = current_linearization_point.block (pressure_block_index);
 
-    // TODO: we don't have .stokes_relevant_partitioning so I am creating a much
-    // bigger vector here, oh well.
-    LinearAlgebra::BlockVector ghosted (introspection.index_sets.system_partitioning,
-                                        introspection.index_sets.system_relevant_partitioning,
-                                        mpi_communicator);
-    // TODO for Timo: can we create the ghost vector inside of denormalize_pressure
-    // (only in cases where we need it)
-    ghosted.block(block_p) = linearized_stokes_variables.block(block_p);
-    denormalize_pressure (this->last_pressure_normalization_adjustment, linearized_stokes_variables, ghosted);
+    denormalize_pressure (this->last_pressure_normalization_adjustment, linearized_stokes_variables);
     current_constraints.set_zero (linearized_stokes_variables);
 
-    linearized_stokes_variables.block (block_p) /= pressure_scaling;
+    linearized_stokes_variables.block (pressure_block_index) /= pressure_scaling;
 
     // we calculate the velocity residual with a zero velocity,
     // computing only the part of the RHS not balanced by the static pressure
-    if (block_p == introspection.block_indices.velocities)
+    if (pressure_block_index == introspection.block_indices.velocities)
       {
         // we can use the whole block here because we set the velocity to zero above
         return system_matrix.block(0,0).residual (residual.block(0),
@@ -1349,7 +1386,7 @@ namespace aspect
         const double residual_u = system_matrix.block(0,1).residual (residual.block(0),
                                                                      linearized_stokes_variables.block(1),
                                                                      system_rhs.block(0));
-        const double residual_p = system_rhs.block(block_p).l2_norm();
+        const double residual_p = system_rhs.block(pressure_block_index).l2_norm();
         return std::sqrt(residual_u*residual_u+residual_p*residual_p);
       }
   }
@@ -1417,7 +1454,7 @@ namespace aspect
 
     const unsigned int n_q_points_1 = quadrature_formula_1.size();
     const unsigned int n_q_points_2 = quadrature_formula_2.size();
-    const unsigned int n_q_points   = dim * n_q_points_2 * static_cast<unsigned int>(std::pow(n_q_points_1, dim-1));
+    const unsigned int n_q_points   = dim * n_q_points_2 * Utilities::fixed_power<dim-1>(n_q_points_1);
 
     std::vector<Point <dim>> quadrature_points;
     quadrature_points.reserve(n_q_points);
@@ -1507,7 +1544,7 @@ namespace aspect
     const Quadrature<dim> &quadrature_formula_0
       = (advection_field.is_temperature() ?
          introspection.quadratures.temperature :
-         introspection.quadratures.compositional_fields);
+         introspection.quadratures.compositional_fields[advection_field.compositional_variable]);
     const unsigned int n_q_points_0 = quadrature_formula_0.size();
 
     // fe values for points evaluation
@@ -2242,7 +2279,7 @@ namespace aspect
                                "Please check the consistency of your input file."));
 
         const bool use_simplified_adiabatic_heating =
-          heating_model_manager.template get_matching_heating_model<HeatingModel::AdiabaticHeating<dim>>()
+          heating_model_manager.template get_matching_active_plugin<HeatingModel::AdiabaticHeating<dim>>()
           .use_simplified_adiabatic_heating();
 
         AssertThrow(use_simplified_adiabatic_heating == true,
@@ -2269,6 +2306,7 @@ namespace aspect
                                       update_quadrature_points | update_JxW_values);
 
     std::vector<Tensor<1,dim>> face_current_velocity_values (fe_face_values.n_quadrature_points);
+    std::vector<Tensor<1,dim>> face_current_mesh_velocity_values (fe_face_values.n_quadrature_points);
 
     const auto &tangential_velocity_boundaries =
       boundary_velocity_manager.get_tangential_boundary_velocity_indicators();
@@ -2277,7 +2315,7 @@ namespace aspect
       boundary_velocity_manager.get_zero_boundary_velocity_indicators();
 
     const auto &prescribed_velocity_boundaries =
-      boundary_velocity_manager.get_active_boundary_velocity_conditions();
+      boundary_velocity_manager.get_prescribed_boundary_velocity_indicators();
 
     // Loop over all of the boundary faces, ...
     for (const auto &cell : dof_handler.active_cell_iterators())
@@ -2298,6 +2336,10 @@ namespace aspect
                 fe_face_values.reinit (cell, face_number);
                 fe_face_values[introspection.extractors.velocities].get_function_values(current_linearization_point,
                                                                                         face_current_velocity_values);
+                // get the mesh velocity, as we need to subtract it off of the advection systems
+                if (parameters.mesh_deformation_enabled)
+                  fe_face_values[introspection.extractors.velocities].get_function_values(mesh_deformation->mesh_velocity,
+                                                                                          face_current_mesh_velocity_values);
 
                 // ... check if the face is an outflow boundary by integrating the normal velocities
                 // (flux through the boundary) as: int u*n ds = Sum_q u(x_q)*n(x_q) JxW(x_q)...
@@ -2311,6 +2353,9 @@ namespace aspect
                     else
                       boundary_velocity = boundary_velocity_manager.boundary_velocity(face->boundary_id(),
                                                                                       fe_face_values.quadrature_point(q));
+
+                    if (parameters.mesh_deformation_enabled)
+                      boundary_velocity -= face_current_mesh_velocity_values[q];
 
                     integrated_flow += (boundary_velocity * fe_face_values.normal_vector(q)) *
                                        fe_face_values.JxW(q);
@@ -2367,104 +2412,54 @@ namespace aspect
   void
   Simulator<dim>::check_consistency_of_boundary_conditions() const
   {
-    // make sure velocity and traction boundary indicators don't appear in multiple lists
-    std::set<types::boundary_id> boundary_indicator_lists[6]
-      = { boundary_velocity_manager.get_zero_boundary_velocity_indicators(),
-          boundary_velocity_manager.get_tangential_boundary_velocity_indicators(),
-          std::set<types::boundary_id>()   // to be prescribed velocity and traction boundary indicators
-        };
+    // a container for the indicators of all boundary conditions
+    std::vector<std::set<types::boundary_id>> boundary_indicator_lists;
+    boundary_indicator_lists.emplace_back(boundary_velocity_manager.get_zero_boundary_velocity_indicators());
+    boundary_indicator_lists.emplace_back(boundary_velocity_manager.get_tangential_boundary_velocity_indicators());
+    boundary_indicator_lists.emplace_back(boundary_velocity_manager.get_prescribed_boundary_velocity_indicators());
+    boundary_indicator_lists.emplace_back(boundary_traction_manager.get_prescribed_boundary_traction_indicators());
 
-    // sets of the boundary indicators only (no selectors and values)
-    std::set<types::boundary_id> velocity_bi;
-    std::set<types::boundary_id> traction_bi;
-
-    for (const auto &p : boundary_velocity_manager.get_active_boundary_velocity_names())
-      velocity_bi.insert(p.first);
-
-    for (const auto &r : parameters.prescribed_traction_boundary_indicators)
-      traction_bi.insert(r.first);
-
-    // are there any indicators that occur in both the prescribed velocity and traction list?
-    std::set<types::boundary_id> intersection;
-    std::set_intersection (velocity_bi.begin(),
-                           velocity_bi.end(),
-                           traction_bi.begin(),
-                           traction_bi.end(),
-                           std::inserter(intersection, intersection.end()));
-
-    // if so, do they have different selectors?
-    if (!intersection.empty())
+    // Make sure that each combination of boundary velocity and boundary traction condition
+    // either refers to different boundary indicators or to different components
+    for (const auto velocity_boundary_id: boundary_indicator_lists[2])
       {
-        for (const auto it : intersection)
+        bool found_compatible_duplicate_boundary_id = false;
+        for (const auto traction_boundary_id: boundary_indicator_lists[3])
           {
-            const std::map<types::boundary_id, std::pair<std::string,std::vector<std::string>>>::const_iterator
-            boundary_velocity_names = boundary_velocity_manager.get_active_boundary_velocity_names().find(it);
-            Assert(boundary_velocity_names != boundary_velocity_manager.get_active_boundary_velocity_names().end(),
-                   ExcInternalError());
+            if (velocity_boundary_id == traction_boundary_id)
+              {
+                // if boundary ids are identical, make sure that the components are different
+                AssertThrow((boundary_velocity_manager.get_component_mask(velocity_boundary_id) &
+                             boundary_traction_manager.get_component_mask(traction_boundary_id)) ==
+                            ComponentMask(introspection.n_components, false),
+                            ExcMessage("Boundary indicator <"
+                                       +
+                                       Utilities::int_to_string(velocity_boundary_id)
+                                       +
+                                       "> with symbolic name <"
+                                       +
+                                       geometry_model->translate_id_to_symbol_name (velocity_boundary_id)
+                                       +
+                                       "> is listed as having both "
+                                       "velocity and traction boundary conditions in the input file."));
 
-            std::set<char> velocity_selector;
-            std::set<char> traction_selector;
-
-            for (const auto it_selector : boundary_velocity_names->second.first)
-              velocity_selector.insert(it_selector);
-
-            for (std::string::const_iterator
-                 it_selector  = parameters.prescribed_traction_boundary_indicators.find(it)->second.first.begin();
-                 it_selector != parameters.prescribed_traction_boundary_indicators.find(it)->second.first.end();
-                 ++it_selector)
-              traction_selector.insert(*it_selector);
-
-            // if there are no selectors specified, throw exception
-            AssertThrow(!velocity_selector.empty() || !traction_selector.empty(),
-                        ExcMessage ("Boundary indicator <"
-                                    +
-                                    Utilities::int_to_string(it)
-                                    +
-                                    "> with symbolic name <"
-                                    +
-                                    geometry_model->translate_id_to_symbol_name (it)
-                                    +
-                                    "> is listed as having both "
-                                    "velocity and traction boundary conditions in the input file."));
-
-            std::set<char> intersection_selector;
-            std::set_intersection (velocity_selector.begin(),
-                                   velocity_selector.end(),
-                                   traction_selector.begin(),
-                                   traction_selector.end(),
-                                   std::inserter(intersection_selector, intersection_selector.end()));
-
-            // if the same selectors are specified, throw exception
-            AssertThrow(intersection_selector.empty(),
-                        ExcMessage ("Selectors of boundary indicator <"
-                                    +
-                                    Utilities::int_to_string(it)
-                                    +
-                                    "> with symbolic name <"
-                                    +
-                                    geometry_model->translate_id_to_symbol_name (it)
-                                    +
-                                    "> are listed as having both "
-                                    "velocity and traction boundary conditions in the input file."));
+                found_compatible_duplicate_boundary_id = true;
+              }
           }
+        // we have ensured the prescribed velocity and prescribed traction boundary conditions
+        // for the current boundary id are compatible. In order to check them against the other
+        // boundary conditions, we need to remove the boundary indicator from one of the lists
+        // to make sure it only appears in one of them. We choose to remove the boundary
+        // indicator from the traction list. We cannot do that in the loop above, because it
+        // invalidates the range of the loop.
+        if (found_compatible_duplicate_boundary_id)
+          boundary_indicator_lists[3].erase(velocity_boundary_id);
       }
 
-    // remove correct boundary indicators that occur in both the velocity and the traction set
-    // but have different selectors
-    std::set<types::boundary_id> union_set;
-    std::set_union (velocity_bi.begin(),
-                    velocity_bi.end(),
-                    traction_bi.begin(),
-                    traction_bi.end(),
-                    std::inserter(union_set, union_set.end()));
-
-    // assign the prescribed boundary indicator list to the boundary_indicator_lists
-    boundary_indicator_lists[3] = union_set;
-
-    // for each combination of boundary indicator lists, make sure that the
+    // for each combination of velocity boundary indicator lists, make sure that the
     // intersection is empty
-    for (unsigned int i=0; i<sizeof(boundary_indicator_lists)/sizeof(boundary_indicator_lists[0]); ++i)
-      for (unsigned int j=i+1; j<sizeof(boundary_indicator_lists)/sizeof(boundary_indicator_lists[0]); ++j)
+    for (unsigned int i=0; i<boundary_indicator_lists.size(); ++i)
+      for (unsigned int j=i+1; j<boundary_indicator_lists.size(); ++j)
         {
           std::set<types::boundary_id> intersection;
           std::set_intersection (boundary_indicator_lists[i].begin(),
@@ -2489,20 +2484,30 @@ namespace aspect
 
     // make sure temperature and heat flux boundary indicators don't appear in multiple lists
     // this is easier than for the velocity/traction, as there are no selectors
-    std::set<types::boundary_id> temperature_bi = boundary_temperature_manager.get_fixed_temperature_boundary_indicators();
-    std::set<types::boundary_id> heat_flux_bi = parameters.fixed_heat_flux_boundary_indicators;
+    boundary_indicator_lists.emplace_back(boundary_temperature_manager.get_fixed_temperature_boundary_indicators());
+    boundary_indicator_lists.emplace_back(parameters.fixed_heat_flux_boundary_indicators);
 
     // are there any indicators that occur in both the prescribed temperature and heat flux list?
     std::set<types::boundary_id> T_intersection;
-    std::set_intersection (temperature_bi.begin(),
-                           temperature_bi.end(),
-                           heat_flux_bi.begin(),
-                           heat_flux_bi.end(),
+    std::set_intersection (boundary_temperature_manager.get_fixed_temperature_boundary_indicators().begin(),
+                           boundary_temperature_manager.get_fixed_temperature_boundary_indicators().end(),
+                           parameters.fixed_heat_flux_boundary_indicators.begin(),
+                           parameters.fixed_heat_flux_boundary_indicators.end(),
                            std::inserter(T_intersection, T_intersection.end()));
 
-    AssertThrow(T_intersection.empty(),
-                ExcMessage ("There is a boundary indicator listed as having both "
-                            "temperature and heat flux boundary conditions in the input file."));
+    AssertThrow (T_intersection.empty(),
+                 ExcMessage ("Boundary indicator <"
+                             +
+                             Utilities::int_to_string(*T_intersection.begin())
+                             +
+                             "> with symbolic name <"
+                             +
+                             geometry_model->translate_id_to_symbol_name (*T_intersection.begin())
+                             +
+                             "> is listed as having more "
+                             "than one type of temperature or heat flux boundary condition in the input file."));
+
+    boundary_indicator_lists.emplace_back(boundary_composition_manager.get_fixed_composition_boundary_indicators());
 
     // Check that the periodic boundaries do not have other boundary conditions set
     using periodic_boundary_set
@@ -2511,88 +2516,87 @@ namespace aspect
     periodic_boundary_set pbs = geometry_model->get_periodic_boundary_pairs();
 
     for (const auto &pb : pbs)
-      {
-        // Throw error if we are trying to use the same boundary for more than one boundary condition
-        AssertThrow( is_element( pb.first.first, boundary_temperature_manager.get_fixed_temperature_boundary_indicators() ) == false &&
-                     is_element( pb.first.second, boundary_temperature_manager.get_fixed_temperature_boundary_indicators() ) == false &&
-                     is_element( pb.first.first, boundary_composition_manager.get_fixed_composition_boundary_indicators() ) == false &&
-                     is_element( pb.first.second, boundary_composition_manager.get_fixed_composition_boundary_indicators() ) == false &&
-                     is_element( pb.first.first, boundary_indicator_lists[0] ) == false && // zero velocity
-                     is_element( pb.first.second, boundary_indicator_lists[0] ) == false && // zero velocity
-                     is_element( pb.first.first, boundary_indicator_lists[1] ) == false && // tangential velocity
-                     is_element( pb.first.second, boundary_indicator_lists[1] ) == false && // tangential velocity
-                     is_element( pb.first.first, boundary_indicator_lists[3] ) == false && // prescribed traction or velocity
-                     is_element( pb.first.second, boundary_indicator_lists[3] ) == false,  // prescribed traction or velocity
-                     ExcMessage("Periodic boundaries must not have boundary conditions set."));
-      }
+      for (const auto &boundary_indicators: boundary_indicator_lists)
+        {
+          AssertThrow(is_element(pb.first.first, boundary_indicators) == false,
+                      ExcMessage ("Boundary indicator <"
+                                  +
+                                  Utilities::int_to_string(pb.first.first)
+                                  +
+                                  "> with symbolic name <"
+                                  +
+                                  geometry_model->translate_id_to_symbol_name (pb.first.first)
+                                  +
+                                  "> is listed as having a periodic boundary condition "
+                                  "in the input file, but also has another type of boundary condition. "
+                                  "Periodic boundaries cannot have other boundary conditions."));
+
+          AssertThrow(is_element(pb.first.second, boundary_indicators) == false,
+                      ExcMessage ("Boundary indicator <"
+                                  +
+                                  Utilities::int_to_string(pb.first.second)
+                                  +
+                                  "> with symbolic name <"
+                                  +
+                                  geometry_model->translate_id_to_symbol_name (pb.first.second)
+                                  +
+                                  "> is listed as having a periodic boundary condition "
+                                  "in the input file, but also has another type of boundary condition. "
+                                  "Periodic boundaries cannot have other boundary conditions."));
+        }
 
     const std::set<types::boundary_id> all_boundary_indicators
       = geometry_model->get_used_boundary_indicators();
-    if (parameters.nonlinear_solver != NonlinearSolver::single_Advection_no_Stokes)
+
+    // next make sure that all listed indicators are actually used by
+    // this geometry
+    for (const auto &list : boundary_indicator_lists)
+      for (const auto &p : list)
+        AssertThrow (all_boundary_indicators.find (p)
+                     != all_boundary_indicators.end(),
+                     ExcMessage ("Boundary indicator <"
+                                 +
+                                 Utilities::int_to_string(p)
+                                 +
+                                 "> is listed for a boundary condition, but is not used by the geometry model."));
+
+    if (parameters.nonlinear_solver == NonlinearSolver::single_Advection_no_Stokes)
       {
-        // next make sure that all listed indicators are actually used by
-        // this geometry
-        for (const auto &list : boundary_indicator_lists)
-          for (const auto &p : list)
-            AssertThrow (all_boundary_indicators.find (p)
-                         != all_boundary_indicators.end(),
-                         ExcMessage ("One of the boundary indicators listed in the input file "
-                                     "is not used by the geometry model."));
-      }
-    else
-      {
-        // next make sure that there are no listed indicators
-        for (const auto &list : boundary_indicator_lists)
-          AssertThrow (list.empty(),
+        // make sure that there are no listed velocity boundary conditions
+        for (unsigned int i=0; i<4; ++i)
+          AssertThrow (boundary_indicator_lists[i].empty(),
                        ExcMessage ("With the solver scheme `single Advection, no Stokes', "
-                                   "one cannot set boundary conditions for velocity."));
+                                   "one cannot set boundary conditions for velocity or traction, "
+                                   "but a boundary condition has been set."));
       }
-
-
-    // now do the same for the fixed temperature indicators and the
-    // compositional indicators
-    for (const auto p : boundary_temperature_manager.get_fixed_temperature_boundary_indicators())
-      AssertThrow (all_boundary_indicators.find (p)
-                   != all_boundary_indicators.end(),
-                   ExcMessage ("One of the fixed boundary temperature indicators listed in the input file "
-                               "is not used by the geometry model."));
-    for (const auto p : boundary_composition_manager.get_fixed_composition_boundary_indicators())
-      AssertThrow (all_boundary_indicators.find (p)
-                   != all_boundary_indicators.end(),
-                   ExcMessage ("One of the fixed boundary composition indicators listed in the input file "
-                               "is not used by the geometry model."));
   }
 
 
 
   template <int dim>
   double
-  Simulator<dim>::compute_initial_newton_residual(const LinearAlgebra::BlockVector &linearized_stokes_initial_guess)
+  Simulator<dim>::compute_initial_newton_residual()
   {
-    // Store the values of the current_linearization_point and linearized_stokes_initial_guess so we can reset them again.
+    // Store the values of current_linearization_point to be able to restore it later.
     LinearAlgebra::BlockVector temp_linearization_point = current_linearization_point;
-    LinearAlgebra::BlockVector temp_linearized_stokes_initial_guess = linearized_stokes_initial_guess;
-    const unsigned int block_vel = introspection.block_indices.velocities;
 
-    // Set the velocity initial guess to zero, but we use the initial guess for the pressure.
+    // Set the velocity initial guess to zero.
     current_linearization_point.block(introspection.block_indices.velocities) = 0;
-    temp_linearized_stokes_initial_guess.block (block_vel) = 0;
 
-    denormalize_pressure (last_pressure_normalization_adjustment,
-                          temp_linearized_stokes_initial_guess,
-                          current_linearization_point);
-
-    // rebuild the whole system to compute the rhs.
+    // Rebuild the whole system to compute the rhs.
     assemble_newton_stokes_system = true;
     rebuild_stokes_preconditioner = false;
-    rebuild_stokes_matrix = boundary_velocity_manager.get_active_boundary_velocity_conditions().size()!=0;
-    assemble_newton_stokes_matrix = boundary_velocity_manager.get_active_boundary_velocity_conditions().size()!=0;
+
+    // Technically we only need the rhs, but we have asserts in place that check if
+    // the system is assembled correctly when boundary conditions are prescribed, so we assemble the whole system.
+    // TODO: This is a waste of time in the first nonlinear iteration. Check if we can modify the asserts in the
+    // assemble_stokes_system() function to only assemble the RHS.
+    rebuild_stokes_matrix = boundary_velocity_manager.get_prescribed_boundary_velocity_indicators().size()!=0;
+    assemble_newton_stokes_matrix = boundary_velocity_manager.get_prescribed_boundary_velocity_indicators().size()!=0;
 
     compute_current_constraints ();
 
     assemble_stokes_system();
-
-    last_pressure_normalization_adjustment = normalize_pressure(current_linearization_point);
 
     const double initial_newton_residual_vel = system_rhs.block(introspection.block_indices.velocities).l2_norm();
     const double initial_newton_residual_p = system_rhs.block(introspection.block_indices.pressure).l2_norm();
@@ -2722,8 +2726,7 @@ namespace aspect
   template struct Simulator<dim>::AdvectionField; \
   template double Simulator<dim>::normalize_pressure(LinearAlgebra::BlockVector &vector) const; \
   template void Simulator<dim>::denormalize_pressure(const double pressure_adjustment, \
-                                                     LinearAlgebra::BlockVector &vector, \
-                                                     const LinearAlgebra::BlockVector &relevant_vector) const; \
+                                                     LinearAlgebra::BlockVector &vector) const; \
   template double Simulator<dim>::compute_pressure_scaling_factor () const; \
   template double Simulator<dim>::get_maximal_velocity (const LinearAlgebra::BlockVector &solution) const; \
   template std::pair<double,double> Simulator<dim>::get_extrapolated_advection_field_range (const AdvectionField &advection_field) const; \
@@ -2739,7 +2742,7 @@ namespace aspect
   template double Simulator<dim>::compute_initial_stokes_residual(); \
   template bool Simulator<dim>::stokes_matrix_depends_on_solution() const; \
   template bool Simulator<dim>::stokes_A_block_is_symmetric() const; \
-  template void Simulator<dim>::interpolate_onto_velocity_system(const TensorFunction<1,dim> &func, LinearAlgebra::Vector &vec);\
+  template void Simulator<dim>::interpolate_onto_velocity_system(const TensorFunction<1,dim> &func, LinearAlgebra::Vector &vec) const;\
   template void Simulator<dim>::apply_limiter_to_dg_solutions(const AdvectionField &advection_field); \
   template void Simulator<dim>::compute_reactions(); \
   template void Simulator<dim>::initialize_current_linearization_point (); \
@@ -2748,7 +2751,7 @@ namespace aspect
   template void Simulator<dim>::replace_outflow_boundary_ids(const unsigned int boundary_id_offset); \
   template void Simulator<dim>::restore_outflow_boundary_ids(const unsigned int boundary_id_offset); \
   template void Simulator<dim>::check_consistency_of_boundary_conditions() const; \
-  template double Simulator<dim>::compute_initial_newton_residual(const LinearAlgebra::BlockVector &linearized_stokes_initial_guess); \
+  template double Simulator<dim>::compute_initial_newton_residual(); \
   template double Simulator<dim>::compute_Eisenstat_Walker_linear_tolerance(const bool EisenstatWalkerChoiceOne, \
                                                                             const double maximum_linear_stokes_solver_tolerance, \
                                                                             const double linear_stokes_solver_tolerance, \

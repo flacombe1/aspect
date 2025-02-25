@@ -1,9 +1,15 @@
 
 
+   Loading Ascii data boundary file ASPECT_DIR/data/boundary-velocity/ascii-data/test/box_3d_bottom.0.txt.
+
+
    Loading Ascii data boundary file ASPECT_DIR/data/boundary-velocity/ascii-data/test/box_3d_left.0.txt.
 
 
    Loading Ascii data boundary file ASPECT_DIR/data/boundary-velocity/ascii-data/test/box_3d_right.0.txt.
+
+
+   Loading Ascii data boundary file ASPECT_DIR/data/boundary-velocity/ascii-data/test/box_3d_top.0.txt.
 
 
    Loading Ascii data boundary file ASPECT_DIR/data/boundary-velocity/ascii-data/test/box_3d_front.0.txt.
@@ -11,18 +17,12 @@
 
    Loading Ascii data boundary file ASPECT_DIR/data/boundary-velocity/ascii-data/test/box_3d_back.0.txt.
 
-
-   Loading Ascii data boundary file ASPECT_DIR/data/boundary-velocity/ascii-data/test/box_3d_bottom.0.txt.
-
-
-   Loading Ascii data boundary file ASPECT_DIR/data/boundary-velocity/ascii-data/test/box_3d_top.0.txt.
-
 Number of active cells: 200 (on 2 levels)
 Number of degrees of freedom: 9,183 (6,615+363+2,205)
 
 *** Timestep 0:  t=0 years, dt=0 years
    Solving temperature system... 0 iterations.
-   Solving Stokes system... 27+0 iterations.
+   Solving Stokes system (GMG)... 27+0 iterations.
 
    Postprocessing:
      RMS, max velocity:                  0.00859 m/year, 0.0206 m/year
@@ -31,7 +31,7 @@ Number of degrees of freedom: 9,183 (6,615+363+2,205)
 
 *** Timestep 1:  t=1e+06 years, dt=1e+06 years
    Solving temperature system... 10 iterations.
-   Solving Stokes system... 23+0 iterations.
+   Solving Stokes system (GMG)... 23+0 iterations.
 
    Postprocessing:
      RMS, max velocity:                  0.00861 m/year, 0.0217 m/year
